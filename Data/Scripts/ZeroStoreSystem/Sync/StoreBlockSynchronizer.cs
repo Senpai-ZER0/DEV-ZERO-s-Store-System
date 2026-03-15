@@ -1,11 +1,16 @@
 using System;
 using System.Collections.Generic;
 using Sandbox.Game;
+using Sandbox.Game.Entities;
+using Sandbox.Game.World;
 using Sandbox.Definitions;
 using Sandbox.ModAPI;
 using VRage.Game;
+using VRage.Game.Entity;
+using VRage.Game.ModAPI;
 using VRage.Game.Definitions;
 using ZeroStoreSystem.Core;
+using VRageMath;
 using ZeroStoreSystem.Domain;
 
 namespace ZeroStoreSystem.Sync
@@ -80,8 +85,12 @@ namespace ZeroStoreSystem.Sync
             int finalPrice = ComputeValidOfferPrice(entry.ItemId, entry.PricePerUnit);
             Log.Info("AddOffer pricing: item=" + entry.ItemId + ", requested=" + entry.PricePerUnit + ", final=" + finalPrice);
 
+            Action<int, int, long, long, long> callback = null;
+            if (IsPrefabOffer(entry.ItemId))
+                callback = (amountSold, amountRemaining, totalPrice, ownerOfBlock, buyerSeller) => OnPrefabTransaction(store, entry.ItemId, amountSold, totalPrice, buyerSeller);
+
             long id;
-            var itemData = new MyStoreItemData(entry.ItemId, entry.Amount, finalPrice, null, null);
+            var itemData = new MyStoreItemData(entry.ItemId, entry.Amount, finalPrice, callback, null);
             var result = store.InsertOffer(itemData, out id);
 
             if (result != Sandbox.ModAPI.Ingame.MyStoreInsertResults.Success)
@@ -170,6 +179,158 @@ namespace ZeroStoreSystem.Sync
                 minimalPrice += (int)(prerequisitesCost * (1f / resultAmount) * productionFactor);
                 return;
             }
+        }
+
+        private bool IsPrefabOffer(MyDefinitionId itemId)
+        {
+            try
+            {
+                return MyDefinitionManager.Static.GetPrefabDefinition(itemId.SubtypeName) != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void OnPrefabTransaction(Sandbox.ModAPI.IMyStoreBlock store, MyDefinitionId itemId, int amountSold, long totalPrice, long buyerIdentityId)
+        {
+            try
+            {
+                var prefab = MyDefinitionManager.Static.GetPrefabDefinition(itemId.SubtypeName);
+                if (prefab == null)
+                    return;
+
+                var player = FindPlayerByIdentity(buyerIdentityId);
+                if (player == null || player.Character == null)
+                {
+                    RefundPlayer(buyerIdentityId, totalPrice, "Buyer player or character not found for prefab purchase.");
+                    return;
+                }
+
+                if (!RemovePurchasedToken(player, itemId, amountSold))
+                {
+                    RefundPlayer(buyerIdentityId, totalPrice, "Purchased prefab token not found in buyer inventory.");
+                    return;
+                }
+
+                Vector3D spawnPos;
+                Vector3D forwardDir;
+                Vector3D upDir;
+                if (!TryFindPrefabSpawn(store, player, prefab, out spawnPos, out forwardDir, out upDir))
+                {
+                    RefundPlayer(buyerIdentityId, totalPrice, "No valid spawn position found for prefab purchase.");
+                    return;
+                }
+
+                var options = SpawningOptions.RotateFirstCockpitTowardsDirection | SpawningOptions.SetAuthorship | SpawningOptions.UseOnlyWorldMatrix;
+                float naturalGravityInterference;
+                MyAPIGateway.Physics.CalculateNaturalGravityAt(spawnPos, out naturalGravityInterference);
+
+                if (naturalGravityInterference != 0f)
+                    MyVisualScriptLogicProvider.SpawnPrefabInGravity(itemId.SubtypeName, spawnPos, forwardDir, ownerId: player.IdentityId, spawningOptions: options);
+                else
+                    MyVisualScriptLogicProvider.SpawnPrefab(itemId.SubtypeName, spawnPos, forwardDir, upDir, ownerId: player.IdentityId, spawningOptions: options);
+
+                MyVisualScriptLogicProvider.AddGPS(itemId.SubtypeName, itemId.SubtypeName, spawnPos, Color.Green, disappearsInS: 0, playerId: player.IdentityId);
+                Log.Info("Prefab spawned from store purchase: prefab=" + itemId.SubtypeName + ", buyer=" + buyerIdentityId + ", price=" + totalPrice + ", pos=" + spawnPos);
+            }
+            catch (Exception e)
+            {
+                RefundPlayer(buyerIdentityId, totalPrice, "Prefab purchase failed: " + e.Message);
+                Log.Error("OnPrefabTransaction failed for " + itemId + ": " + e);
+            }
+        }
+
+        private IMyPlayer FindPlayerByIdentity(long identityId)
+        {
+            var players = new List<IMyPlayer>();
+            MyAPIGateway.Multiplayer.Players.GetPlayers(players);
+            for (int i = 0; i < players.Count; i++)
+            {
+                var player = players[i];
+                if (player != null && player.IdentityId == identityId)
+                    return player;
+            }
+            return null;
+        }
+
+        private bool RemovePurchasedToken(IMyPlayer player, MyDefinitionId itemId, int amountSold)
+        {
+            try
+            {
+                if (player == null || player.Character == null)
+                    return false;
+
+                var inventory = player.Character.GetInventory();
+                if (inventory == null)
+                    return false;
+
+                inventory.RemoveItemsOfType((VRage.MyFixedPoint)amountSold, itemId);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool TryFindPrefabSpawn(Sandbox.ModAPI.IMyStoreBlock store, IMyPlayer player, MyPrefabDefinition prefab, out Vector3D spawnPos, out Vector3D forwardDir, out Vector3D upDir)
+        {
+            spawnPos = Vector3D.Zero;
+            forwardDir = Vector3D.Forward;
+            upDir = Vector3D.Up;
+
+            if (player == null || player.Character == null)
+                return false;
+
+            var position = player.GetPosition() + (player.Character.WorldMatrix.Forward * 100d);
+            float naturalGravityInterference;
+            MyAPIGateway.Physics.CalculateNaturalGravityAt(position, out naturalGravityInterference);
+
+            if (naturalGravityInterference != 0f)
+            {
+                var planet = MyGamePruningStructure.GetClosestPlanet(position);
+                if (planet == null)
+                    return false;
+
+                var surfacePosition = planet.GetClosestSurfacePointGlobal(position);
+                upDir = Vector3D.Normalize(surfacePosition - planet.PositionComp.GetPosition());
+                forwardDir = Vector3D.CalculatePerpendicularVector(upDir);
+
+                var freePlace = MyEntities.FindFreePlace(surfacePosition, prefab.BoundingSphere.Radius);
+                if (!freePlace.HasValue)
+                    return false;
+
+                spawnPos = freePlace.Value;
+                return true;
+            }
+            else
+            {
+                var freePlace = MyEntities.FindFreePlace(position, prefab.BoundingSphere.Radius);
+                if (!freePlace.HasValue)
+                    return false;
+
+                spawnPos = freePlace.Value;
+                forwardDir = Vector3D.Forward;
+                upDir = Vector3D.Up;
+                return true;
+            }
+        }
+
+        private void RefundPlayer(long buyerIdentityId, long totalPrice, string reason)
+        {
+            try
+            {
+                var player = FindPlayerByIdentity(buyerIdentityId);
+                if (player != null)
+                    player.RequestChangeBalance(totalPrice);
+            }
+            catch
+            {
+            }
+
+            Log.Error(reason + " Buyer=" + buyerIdentityId + ", refund=" + totalPrice);
         }
 
         private void AddOrder(Sandbox.ModAPI.IMyStoreBlock store, StoreEntryPlan entry)

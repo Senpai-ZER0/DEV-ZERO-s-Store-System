@@ -1,5 +1,5 @@
-<?xml version="1.0"?>
-<Definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+<?xml version='1.0' encoding='utf-8'?>
+<Definitions>
   <Blueprints>
     <Blueprint>
       <Id>
@@ -571,5 +571,5 @@
       <IsPrimary>true</IsPrimary>
     </Blueprint>
 
-  </Blueprints>
+  <Blueprint><Id><TypeId>BlueprintDefinition</TypeId><SubtypeId>SCC Zeus MKI</SubtypeId></Id><DisplayName>SCC Zeus MKI</DisplayName><Icon>Textures\GUI\Icons\component\construction_restricted.dds</Icon><Prerequisites><Item Amount="5000" TypeId="Ingot" SubtypeId="Iron" /></Prerequisites><Result Amount="1" TypeId="Component" SubtypeId="SCC Zeus MKI" /><BaseProductionTimeInSeconds>10</BaseProductionTimeInSeconds><IsPrimary>true</IsPrimary></Blueprint></Blueprints>
 </Definitions>

@@ -131,6 +131,12 @@ namespace ZeroStoreSystem.Config
                 if (FindRule(config, id) == null)
                     AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
             }
+
+            foreach (var id in StoreItemCatalog.KnownShipOfferIds)
+            {
+                if (FindRule(config, id) == null)
+                    AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
+            }
         }
 
         private static void AddRule(StoreBlockConfig config, string itemId, bool allowed, bool forceInclude, bool offerEnabled, float offerPriceMod, int offerAmount, bool orderEnabled, float orderPriceMod, int orderAmount)

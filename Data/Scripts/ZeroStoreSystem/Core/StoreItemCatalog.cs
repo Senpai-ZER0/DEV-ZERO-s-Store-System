@@ -88,6 +88,11 @@ namespace ZeroStoreSystem.Core
             "MyObjectBuilder_AmmoMagazine/ElitePistolMagazine"
         };
 
+        public static readonly string[] KnownShipOfferIds =
+        {
+            "MyObjectBuilder_Component/SCC Zeus MKI"
+        };
+
         public static IEnumerable<string> EnumerateKnownVanillaIds()
         {
             for (int i = 0; i < VanillaComponentIds.Length; i++)
@@ -101,12 +106,18 @@ namespace ZeroStoreSystem.Core
 
             for (int i = 0; i < VanillaAmmoIds.Length; i++)
                 yield return VanillaAmmoIds[i];
+
+            for (int i = 0; i < KnownShipOfferIds.Length; i++)
+                yield return KnownShipOfferIds[i];
         }
 
         public static StoreItemCategory GetCategory(string id)
         {
             if (string.IsNullOrWhiteSpace(id))
                 return StoreItemCategory.Unknown;
+
+            if (Contains(KnownShipOfferIds, id))
+                return StoreItemCategory.Component;
 
             if (id.StartsWith("MyObjectBuilder_Component/", StringComparison.OrdinalIgnoreCase))
                 return StoreItemCategory.Component;
