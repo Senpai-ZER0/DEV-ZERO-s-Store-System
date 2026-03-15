@@ -8,7 +8,7 @@
                 <SubtypeId>RestrictedConstruction</SubtypeId>
             </Id>
             <DisplayName>Restricted Component</DisplayName>
-            <Icon>Textures\GUI\Icons\component\construction_restricted.dds</Icon>
+            <Icon></Icon>
             <Size>
                 <X>0.2</X>
                 <Y>0.1</Y>
