@@ -16,7 +16,6 @@ namespace ZeroStoreSystem.Session
 
         private bool _chatHooked;
         private bool _rhfInitRequested;
-        private int _tick;
 
         public override void LoadData()
         {
@@ -29,20 +28,24 @@ namespace ZeroStoreSystem.Session
         public override void BeforeStart()
         {
             base.BeforeStart();
-            TryHookChat();
-            TryInitRhf();
+
+            if (MyAPIGateway.Utilities != null && !_chatHooked)
+            {
+                MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
+                _chatHooked = true;
+            }
+
+            if (!_rhfInitRequested)
+            {
+                _rhfInitRequested = true;
+                RichHudClient.Init("ZERO Store System", OnRichHudReady, OnRichHudReset);
+            }
         }
+
 
         public override void UpdateAfterSimulation()
         {
             base.UpdateAfterSimulation();
-            _tick++;
-
-            if (!_chatHooked)
-                TryHookChat();
-
-            if (!_rhfInitRequested || (!RichHudClient.Registered && (_tick % 180 == 0)))
-                TryInitRhf();
 
             if (AdminEditor != null)
             {
@@ -61,39 +64,18 @@ namespace ZeroStoreSystem.Session
                 _chatHooked = false;
             }
 
-            try { RichHudClient.Reset(); } catch { }
+            try
+            {
+                RichHudClient.Reset();
+            }
+            catch
+            {
+            }
 
             Log.Info("Session unloaded.");
             AdminEditor = null;
             GlobalConfig = null;
             Instance = null;
-        }
-
-        private void TryHookChat()
-        {
-            if (_chatHooked || MyAPIGateway.Utilities == null)
-                return;
-
-            MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
-            _chatHooked = true;
-            Log.Info("Chat command hook registered.");
-        }
-
-        private void TryInitRhf()
-        {
-            if (MyAPIGateway.Session == null)
-                return;
-
-            _rhfInitRequested = true;
-            try
-            {
-                RichHudClient.Init("ZERO Store System", OnRichHudReady, OnRichHudReset);
-                Log.Info("RHF init requested.");
-            }
-            catch (System.Exception e)
-            {
-                Log.Error("RHF init request failed: " + e);
-            }
         }
 
         private void OnRichHudReady()
@@ -120,7 +102,6 @@ namespace ZeroStoreSystem.Session
                 return;
 
             sendToOthers = false;
-            Log.Info("Received command: " + msg);
 
             if (!AdminAccess.IsLocalAdminOrHigher())
             {
@@ -135,9 +116,6 @@ namespace ZeroStoreSystem.Session
                     MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Editor is not initialized yet.");
                 return;
             }
-
-            if (!AdminEditor.Ready && RichHudClient.Registered)
-                AdminEditor.Init();
 
             if (!AdminEditor.OpenForLocalAdmin() && MyAPIGateway.Utilities != null)
                 MyAPIGateway.Utilities.ShowMessage("ZERO Store", "RHF editor is not ready yet.");
