@@ -55,14 +55,16 @@ namespace ZeroStoreSystem.UI.Admin
             if (_page != null)
                 return;
 
+            Log.Info("Initializing RHF admin editor.");
             _rootCategory = new TerminalPageCategory { Name = "ZERO Store" };
-            _page = new ControlPage { Name = "Admin Store Editor", Enabled = AdminAccess.IsLocalAdminOrHigher() };
-            _rootCategory.Enabled = _page.Enabled;
+            _page = new ControlPage { Name = "Admin Store Editor", Enabled = true };
+            _rootCategory.Enabled = true;
 
             BuildUi();
 
             _rootCategory.Add(_page);
             RichHudTerminal.Root.Add(_rootCategory);
+            Log.Info("RHF admin editor registered in terminal root.");
 
             RefreshBlockList();
             RefreshAdminAccess();
@@ -96,6 +98,7 @@ namespace ZeroStoreSystem.UI.Admin
 
             if (!RichHudClient.Registered || _page == null)
             {
+                Log.Error("OpenForLocalAdmin failed: RHF registered=" + RichHudClient.Registered + ", page=" + (_page != null));
                 Notify("RHF is not ready yet.");
                 return false;
             }

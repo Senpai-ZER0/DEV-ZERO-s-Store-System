@@ -1,4 +1,5 @@
 using ZeroStoreSystem.Config.Models;
+using ZeroStoreSystem.Core;
 
 namespace ZeroStoreSystem.UI.Admin
 {
@@ -7,6 +8,8 @@ namespace ZeroStoreSystem.UI.Admin
         public string Id;
         public string ShortName;
         public StoreItemRule Rule;
+        public StoreItemCategory Category;
+        public bool IsVanilla;
 
         public bool IsActive
         {

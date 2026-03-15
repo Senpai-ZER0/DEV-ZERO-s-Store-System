@@ -32,36 +32,25 @@ namespace ZeroStoreSystem.Sync
             get { return KnownIds.Count; }
         }
 
-        public static void GetRegisteredTerminalBlocks(List<IMyTerminalBlock> output)
+        public static void GetRegisteredTerminalBlocks(List<IMyTerminalBlock> result)
         {
-            if (output == null)
+            if (result == null)
                 return;
 
-            output.Clear();
+            result.Clear();
+
             if (MyAPIGateway.Entities == null)
                 return;
 
-            List<long> stale = null;
             foreach (var id in KnownIds)
             {
                 IMyEntity entity;
-                if (!MyAPIGateway.Entities.TryGetEntityById(id, out entity) || entity == null || entity.MarkedForClose)
-                {
-                    if (stale == null)
-                        stale = new List<long>();
-                    stale.Add(id);
+                if (!MyAPIGateway.Entities.TryGetEntityById(id, out entity))
                     continue;
-                }
 
                 var terminal = entity as IMyTerminalBlock;
-                if (terminal != null)
-                    output.Add(terminal);
-            }
-
-            if (stale != null)
-            {
-                for (int i = 0; i < stale.Count; i++)
-                    KnownIds.Remove(stale[i]);
+                if (terminal != null && !terminal.MarkedForClose)
+                    result.Add(terminal);
             }
         }
     }

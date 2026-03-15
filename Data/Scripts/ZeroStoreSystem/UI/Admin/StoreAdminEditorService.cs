@@ -1,5 +1,7 @@
+using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
 using ZeroStoreSystem.Core;
+using ZeroStoreSystem.Session;
 using ZeroStoreSystem.Sync;
 
 namespace ZeroStoreSystem.UI.Admin
@@ -17,7 +19,8 @@ namespace ZeroStoreSystem.UI.Admin
                 return false;
             }
 
-            return true;
+            var editor = EconomySession.Instance != null ? EconomySession.Instance.AdminEditor : null;
+            return editor != null && editor.OpenForLocalAdmin();
         }
 
         public static bool SaveToBlockOnly(IMyTerminalBlock block, StoreAdminEditorState state)
@@ -38,11 +41,12 @@ namespace ZeroStoreSystem.UI.Admin
                 return false;
 
             var cube = block as IMyCubeBlock;
-            if (cube == null)
-                return false;
+            if (cube != null)
+            {
+                var refresh = new StoreRefreshService();
+                refresh.Regenerate(cube, EconomySession.Instance != null ? EconomySession.Instance.GlobalConfig : null);
+            }
 
-            var refresh = new StoreRefreshService();
-            refresh.Regenerate(cube, ZeroStoreSystem.Session.EconomySession.Instance != null ? ZeroStoreSystem.Session.EconomySession.Instance.GlobalConfig : null);
             return true;
         }
     }

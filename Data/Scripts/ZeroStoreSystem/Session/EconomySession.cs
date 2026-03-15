@@ -1,97 +1,113 @@
 using Sandbox.ModAPI;
 using VRage.Game.Components;
-using ZeroStoreSystem.Config;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
-using ZeroStoreSystem.UI.Admin;
 using RichHudFramework.Client;
+using ZeroStoreSystem.UI.Admin;
 
 namespace ZeroStoreSystem.Session
 {
-    [MySessionComponentDescriptor(MyUpdateOrder.NoUpdate)]
+    [MySessionComponentDescriptor(MyUpdateOrder.AfterSimulation)]
     public class EconomySession : MySessionComponentBase
     {
         public static EconomySession Instance { get; private set; }
         public GlobalStoreConfig GlobalConfig { get; private set; }
         public StoreAdminRhfEditor AdminEditor { get; private set; }
 
-        private bool _chatRegistered;
+        private bool _chatHooked;
+        private bool _rhfInitRequested;
+        private int _tick;
 
         public override void LoadData()
         {
             Instance = this;
-            GlobalConfig = GlobalStoreConfigManager.GetDefaultConfig();
+            GlobalConfig = new GlobalStoreConfig();
+            AdminEditor = new StoreAdminRhfEditor();
             Log.Info("Session loaded.");
         }
 
         public override void BeforeStart()
         {
-            if (MyAPIGateway.Utilities != null && !_chatRegistered && !MyAPIGateway.Utilities.IsDedicated)
-            {
-                MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
-                _chatRegistered = true;
-            }
+            base.BeforeStart();
+            TryHookChat();
+            TryInitRhf();
+        }
 
-            if (!MyAPIGateway.Utilities.IsDedicated)
+        public override void UpdateAfterSimulation()
+        {
+            base.UpdateAfterSimulation();
+            _tick++;
+
+            if (!_chatHooked)
+                TryHookChat();
+
+            if (!_rhfInitRequested || (!RichHudClient.Registered && (_tick % 180 == 0)))
+                TryInitRhf();
+
+            if (AdminEditor != null)
             {
-                RichHudClient.Init("ZERO Store System", OnRichHudReady, OnRichHudReset);
+                if (RichHudClient.Registered && !AdminEditor.Ready)
+                    AdminEditor.Init();
+
+                AdminEditor.RefreshAdminAccess();
             }
         }
 
         protected override void UnloadData()
         {
-            if (_chatRegistered && MyAPIGateway.Utilities != null)
+            if (_chatHooked && MyAPIGateway.Utilities != null)
             {
                 MyAPIGateway.Utilities.MessageEntered -= OnMessageEntered;
-                _chatRegistered = false;
+                _chatHooked = false;
             }
 
-            if (!MyAPIGateway.Utilities.IsDedicated)
-                RichHudClient.Reset();
-
-            if (AdminEditor != null)
-            {
-                AdminEditor.Close();
-                AdminEditor = null;
-            }
+            try { RichHudClient.Reset(); } catch { }
 
             Log.Info("Session unloaded.");
+            AdminEditor = null;
             GlobalConfig = null;
             Instance = null;
         }
 
+        private void TryHookChat()
+        {
+            if (_chatHooked || MyAPIGateway.Utilities == null)
+                return;
+
+            MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
+            _chatHooked = true;
+            Log.Info("Chat command hook registered.");
+        }
+
+        private void TryInitRhf()
+        {
+            if (MyAPIGateway.Session == null)
+                return;
+
+            _rhfInitRequested = true;
+            try
+            {
+                RichHudClient.Init("ZERO Store System", OnRichHudReady, OnRichHudReset);
+                Log.Info("RHF init requested.");
+            }
+            catch (System.Exception e)
+            {
+                Log.Error("RHF init request failed: " + e);
+            }
+        }
+
         private void OnRichHudReady()
         {
-            AdminEditor = new StoreAdminRhfEditor();
-            AdminEditor.Init();
-            Log.Info("RHF admin editor initialized.");
-
-            // Make the editor immediately available in the RHF terminal for admins
-            // so opening via chat command remains optional.
-            if (AdminAccess.IsLocalAdminOrHigher() && AdminEditor != null)
-            {
-                try
-                {
-                    AdminEditor.OpenForLocalAdmin();
-                    RichHudFramework.UI.Client.RichHudTerminal.CloseMenu();
-                    Log.Info("RHF admin editor registered in terminal for local admin.");
-                }
-                catch (System.Exception e)
-                {
-                    Log.Error("Failed to register RHF admin editor automatically: " + e);
-                }
-            }
+            Log.Info("RHF client ready.");
+            if (AdminEditor != null)
+                AdminEditor.Init();
         }
 
         private void OnRichHudReset()
         {
+            Log.Info("RHF client reset.");
             if (AdminEditor != null)
-            {
                 AdminEditor.Close();
-                AdminEditor = null;
-            }
-
-            Log.Info("RHF admin editor reset.");
         }
 
         private void OnMessageEntered(string messageText, ref bool sendToOthers)
@@ -99,27 +115,32 @@ namespace ZeroStoreSystem.Session
             if (string.IsNullOrWhiteSpace(messageText))
                 return;
 
-            string trimmed = messageText.Trim();
-            if (!trimmed.StartsWith("/zstore", System.StringComparison.OrdinalIgnoreCase))
+            string msg = messageText.Trim();
+            if (!msg.StartsWith("/zstore"))
                 return;
 
             sendToOthers = false;
+            Log.Info("Received command: " + msg);
 
-            string[] parts = trimmed.Split(new[] { ' ' }, System.StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 1 || (parts.Length >= 2 && parts[1].Equals("editor", System.StringComparison.OrdinalIgnoreCase)))
+            if (!AdminAccess.IsLocalAdminOrHigher())
             {
-                if (AdminEditor != null)
-                    AdminEditor.OpenForLocalAdmin();
-                else if (MyAPIGateway.Utilities != null)
-                    MyAPIGateway.Utilities.ShowMessage("ZERO Store", "RHF editor is not ready yet.");
+                if (MyAPIGateway.Utilities != null)
+                    MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Admin access required.");
                 return;
             }
 
-            if (parts.Length >= 2 && parts[1].Equals("help", System.StringComparison.OrdinalIgnoreCase))
+            if (AdminEditor == null)
             {
                 if (MyAPIGateway.Utilities != null)
-                    MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Commands: /zstore editor");
+                    MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Editor is not initialized yet.");
+                return;
             }
+
+            if (!AdminEditor.Ready && RichHudClient.Registered)
+                AdminEditor.Init();
+
+            if (!AdminEditor.OpenForLocalAdmin() && MyAPIGateway.Utilities != null)
+                MyAPIGateway.Utilities.ShowMessage("ZERO Store", "RHF editor is not ready yet.");
         }
     }
 }

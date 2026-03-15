@@ -1,4 +1,5 @@
 using Sandbox.ModAPI;
+using VRage.Game;
 using VRage.Game.ModAPI;
 
 namespace ZeroStoreSystem.Core
@@ -10,12 +11,33 @@ namespace ZeroStoreSystem.Core
             if (MyAPIGateway.Session == null)
                 return false;
 
-            if (MyAPIGateway.Session.HasCreativeRights)
-                return true;
+            try
+            {
+                if (MyAPIGateway.Session.HasCreativeRights)
+                    return true;
+            }
+            catch { }
+
+            try
+            {
+                if (MyAPIGateway.Multiplayer == null || !MyAPIGateway.Multiplayer.MultiplayerActive)
+                    return true;
+            }
+            catch { }
 
             var player = MyAPIGateway.Session.Player;
             if (player == null)
                 return false;
+
+            try
+            {
+                if (player.PromoteLevel == MyPromoteLevel.Admin ||
+                    player.PromoteLevel == MyPromoteLevel.Owner ||
+                    player.PromoteLevel == MyPromoteLevel.SpaceMaster ||
+                    player.PromoteLevel == MyPromoteLevel.Scripter)
+                    return true;
+            }
+            catch { }
 
             try
             {

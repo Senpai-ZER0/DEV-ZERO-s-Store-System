@@ -8,10 +8,20 @@ using ZeroStoreSystem.Core;
 
 namespace ZeroStoreSystem.UI.Admin
 {
+    public enum StoreEditorFilter
+    {
+        All,
+        Components,
+        Ingots,
+        Ores,
+        Ammo
+    }
+
     public class StoreAdminEditorState
     {
         public string SearchText = string.Empty;
         public bool ActiveOnly = false;
+        public StoreEditorFilter SelectedFilter = StoreEditorFilter.All;
         public StoreBlockConfig Config = new StoreBlockConfig();
         public readonly List<StoreAdminEditorItemViewModel> Items = new List<StoreAdminEditorItemViewModel>();
 
@@ -34,6 +44,22 @@ namespace ZeroStoreSystem.UI.Admin
         {
             IEnumerable<StoreAdminEditorItemViewModel> query = Items;
 
+            switch (SelectedFilter)
+            {
+                case StoreEditorFilter.Components:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Component);
+                    break;
+                case StoreEditorFilter.Ingots:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Ingot);
+                    break;
+                case StoreEditorFilter.Ores:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Ore);
+                    break;
+                case StoreEditorFilter.Ammo:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Ammo);
+                    break;
+            }
+
             if (ActiveOnly)
                 query = query.Where(x => x != null && x.IsActive);
 
@@ -45,15 +71,27 @@ namespace ZeroStoreSystem.UI.Admin
                      (x.ShortName != null && x.ShortName.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)));
             }
 
-            return query.OrderBy(x => x.ShortName).ThenBy(x => x.Id);
+            return query
+                .OrderBy(x => StoreItemCatalog.GetCategorySortOrder(x.Category))
+                .ThenBy(x => x.IsVanilla ? 0 : 1)
+                .ThenBy(x => x.ShortName)
+                .ThenBy(x => x.Id);
         }
 
         public void RebuildItems()
         {
             Items.Clear();
 
-            if (Config == null || Config.ItemRules == null)
-                return;
+            if (Config == null)
+                Config = new StoreBlockConfig();
+
+            if (Config.ItemRules == null)
+                Config.ItemRules = new List<StoreItemRule>();
+
+            foreach (var id in StoreItemCatalog.EnumerateKnownVanillaIds())
+            {
+                EnsureRule(id);
+            }
 
             for (int i = 0; i < Config.ItemRules.Count; i++)
             {
@@ -65,9 +103,25 @@ namespace ZeroStoreSystem.UI.Admin
                 {
                     Id = rule.Id,
                     ShortName = GetShortName(rule.Id),
-                    Rule = rule
+                    Rule = rule,
+                    Category = StoreItemCatalog.GetCategory(rule.Id),
+                    IsVanilla = StoreItemCatalog.IsVanilla(rule.Id)
                 });
             }
+        }
+
+        private StoreItemRule EnsureRule(string id)
+        {
+            for (int i = 0; i < Config.ItemRules.Count; i++)
+            {
+                var rule = Config.ItemRules[i];
+                if (rule != null && string.Equals(rule.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return rule;
+            }
+
+            var created = StoreItemCatalog.CreateDefaultRule(id);
+            Config.ItemRules.Add(created);
+            return created;
         }
 
         private static string GetShortName(string id)
