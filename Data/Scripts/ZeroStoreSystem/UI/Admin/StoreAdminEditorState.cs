@@ -18,6 +18,10 @@ namespace ZeroStoreSystem.UI.Admin
         public void LoadFromBlock(IMyTerminalBlock block)
         {
             Config = StoreConfigManager.ReadBlockConfig(block);
+
+            if (Config != null && Config.ItemRules != null)
+                VanillaComponentCatalog.EnsurePresent(Config.ItemRules);
+
             RebuildItems();
         }
 
@@ -52,8 +56,13 @@ namespace ZeroStoreSystem.UI.Admin
         {
             Items.Clear();
 
-            if (Config == null || Config.ItemRules == null)
-                return;
+            if (Config == null)
+                Config = new StoreBlockConfig();
+
+            if (Config.ItemRules == null)
+                Config.ItemRules = new List<StoreItemRule>();
+
+            VanillaComponentCatalog.EnsurePresent(Config.ItemRules);
 
             for (int i = 0; i < Config.ItemRules.Count; i++)
             {
