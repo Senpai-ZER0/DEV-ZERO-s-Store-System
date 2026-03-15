@@ -25,7 +25,7 @@ namespace ZeroStoreSystem.Config
                 }
 
                 ParseIniLike(block.CustomData, config);
-                Log.Info("Store config loaded for '" + block.CustomName + "', TradeMode=" + config.TradeMode);
+                Log.Info("Store config loaded for '" + block.CustomName + "', TradeMode=" + config.TradeMode + ", RefreshIntervalSeconds=" + config.RefreshIntervalSeconds);
             }
             catch (Exception e)
             {
@@ -46,6 +46,7 @@ namespace ZeroStoreSystem.Config
             sb.AppendLine("UseAutoProfile=true");
             sb.AppendLine("ProfileId=");
             sb.AppendLine("TradeMode=BuyAndSell");
+            sb.AppendLine("RefreshIntervalSeconds=0");
 
             block.CustomData = sb.ToString();
         }
@@ -97,6 +98,12 @@ namespace ZeroStoreSystem.Config
 
                     case "TradeMode":
                         config.TradeMode = ParseTradeMode(value);
+                        break;
+
+                    case "RefreshIntervalSeconds":
+                        int refreshIntervalSeconds;
+                        if (int.TryParse(value, out refreshIntervalSeconds))
+                            config.RefreshIntervalSeconds = Math.Max(0, refreshIntervalSeconds);
                         break;
                 }
             }

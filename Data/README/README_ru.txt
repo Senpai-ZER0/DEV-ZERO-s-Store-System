@@ -23,3 +23,11 @@ Step2 update:
 - added test generator with SteelPlate offer and Construction order
 - added first regeneration flow and log output
 - StoreBlockSynchronizer still contains placeholders for real store API write calls
+
+
+Обновление конфигурации:
+- При изменении CustomData магазин теперь автоматически ставится в очередь на быстрый regen.
+- Быстрый regen также ставится в очередь при выключении/включении блока магазина.
+- Новый параметр конфига: RefreshIntervalSeconds=0
+  0 = периодическое обновление отключено
+  >0 = магазин будет автоматически обновляться с указанным интервалом в секундах.
