@@ -38,51 +38,42 @@ namespace ZeroStoreSystem.Config
             return config;
         }
 
+
+        public static void SaveBlockConfig(IMyTerminalBlock block, StoreBlockConfig config)
+        {
+            if (block == null || config == null)
+                return;
+
+            block.CustomData = SerializeBlockConfig(config);
+        }
+
+        public static string SerializeBlockConfig(StoreBlockConfig config)
+        {
+            if (config == null)
+                config = new StoreBlockConfig();
+
+            var sb = new StringBuilder();
+
+            sb.AppendLine("[Store]");
+            sb.AppendLine("Enabled=" + config.Enabled.ToString().ToLowerInvariant());
+            sb.AppendLine("UseAutoProfile=" + config.UseAutoProfile.ToString().ToLowerInvariant());
+            sb.AppendLine("ProfileId=" + (config.ProfileId ?? string.Empty));
+            sb.AppendLine("TradeMode=" + config.TradeMode);
+            sb.AppendLine("RefreshIntervalSeconds=" + config.RefreshIntervalSeconds.ToString(CultureInfo.InvariantCulture));
+            sb.AppendLine();
+
+            AppendItemGroups(sb, config);
+            return sb.ToString();
+        }
+
         public static void WriteDefaultBlockConfig(IMyTerminalBlock block)
         {
             if (block == null)
                 return;
 
-            var sb = new StringBuilder();
-
-            sb.AppendLine("[Store]");
-            sb.AppendLine("Enabled=true");
-            sb.AppendLine("UseAutoProfile=true");
-            sb.AppendLine("ProfileId=");
-            sb.AppendLine("TradeMode=BuyAndSell");
-            sb.AppendLine("RefreshIntervalSeconds=0");
-            sb.AppendLine();
-
-            sb.AppendLine("; ===== Components: structural =====");
-            AppendItemRule(sb, "MyObjectBuilder_Component/SteelPlate", true, true, true, 1.0f, 200, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Construction", true, true, false, 1.0f, 0, true, 1.0f, 150);
-            AppendItemRule(sb, "MyObjectBuilder_Component/InteriorPlate", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Girder", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/SmallTube", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/LargeTube", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/MetalGrid", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/BulletproofGlass", true, false, false, 1.0f, 0, false, 1.0f, 0);
-
-            sb.AppendLine("; ===== Components: electronics =====");
-            AppendItemRule(sb, "MyObjectBuilder_Component/Computer", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Display", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Detector", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/RadioCommunication", true, false, false, 1.0f, 0, false, 1.0f, 0);
-
-            sb.AppendLine("; ===== Components: machinery =====");
-            AppendItemRule(sb, "MyObjectBuilder_Component/Motor", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Reactor", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Thrust", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Superconductor", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/GravityGenerator", true, false, false, 1.0f, 0, false, 1.0f, 0);
-
-            sb.AppendLine("; ===== Components: specialized =====");
-            AppendItemRule(sb, "MyObjectBuilder_Component/Explosives", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/Medical", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/PowerCell", true, false, false, 1.0f, 0, false, 1.0f, 0);
-            AppendItemRule(sb, "MyObjectBuilder_Component/SolarCell", true, false, false, 1.0f, 0, false, 1.0f, 0);
-
-            block.CustomData = sb.ToString();
+            var config = new StoreBlockConfig();
+            AddDefaultVanillaComponentRules(config);
+            block.CustomData = SerializeBlockConfig(config);
         }
 
         private static void AppendItemRule(
@@ -107,6 +98,167 @@ namespace ZeroStoreSystem.Config
             sb.AppendLine("Order.PriceMod=" + orderPriceMod.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine("Order.Amount=" + orderAmount.ToString(CultureInfo.InvariantCulture));
             sb.AppendLine();
+        }
+
+        private static void AddDefaultVanillaComponentRules(StoreBlockConfig config)
+        {
+            if (config == null)
+                return;
+
+            AddRule(config, "MyObjectBuilder_Component/SteelPlate", true, true, true, 1.0f, 200, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Construction", true, true, false, 1.0f, 0, true, 1.0f, 150);
+            AddRule(config, "MyObjectBuilder_Component/InteriorPlate", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Girder", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/SmallTube", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/LargeTube", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/MetalGrid", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/BulletproofGlass", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Computer", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Display", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Detector", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/RadioCommunication", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Motor", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Reactor", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Thrust", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Superconductor", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/GravityGenerator", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Explosives", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Medical", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/PowerCell", true, false, false, 1.0f, 0, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/SolarCell", true, false, false, 1.0f, 0, false, 1.0f, 0);
+        }
+
+        private static void AddRule(StoreBlockConfig config, string itemId, bool allowed, bool forceInclude, bool offerEnabled, float offerPriceMod, int offerAmount, bool orderEnabled, float orderPriceMod, int orderAmount)
+        {
+            var rule = new StoreItemRule();
+            rule.Id = itemId;
+            rule.Allowed = allowed;
+            rule.ForceInclude = forceInclude;
+            rule.Offer.Enabled = offerEnabled;
+            rule.Offer.PriceMod = offerPriceMod;
+            rule.Offer.Amount = offerAmount;
+            rule.Order.Enabled = orderEnabled;
+            rule.Order.PriceMod = orderPriceMod;
+            rule.Order.Amount = orderAmount;
+            config.ItemRules.Add(rule);
+        }
+
+        private static void AppendItemGroups(StringBuilder sb, StoreBlockConfig config)
+        {
+            AppendGroupHeader(sb, "Components: structural");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/SteelPlate");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Construction");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/InteriorPlate");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Girder");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/SmallTube");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/LargeTube");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/MetalGrid");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/BulletproofGlass");
+
+            AppendGroupHeader(sb, "Components: electronics");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Computer");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Display");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Detector");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/RadioCommunication");
+
+            AppendGroupHeader(sb, "Components: machinery");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Motor");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Reactor");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Thrust");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Superconductor");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/GravityGenerator");
+
+            AppendGroupHeader(sb, "Components: specialized");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Explosives");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/Medical");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/PowerCell");
+            AppendKnownRule(sb, config, "MyObjectBuilder_Component/SolarCell");
+
+            if (config == null || config.ItemRules == null)
+                return;
+
+            foreach (var rule in config.ItemRules)
+            {
+                if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
+                    continue;
+
+                if (IsKnownVanillaComponent(rule.Id))
+                    continue;
+
+                AppendItemRule(sb, rule.Id, rule.Allowed, rule.ForceInclude,
+                    rule.Offer != null && rule.Offer.Enabled,
+                    rule.Offer != null ? rule.Offer.PriceMod : 1.0f,
+                    rule.Offer != null ? rule.Offer.Amount : 0,
+                    rule.Order != null && rule.Order.Enabled,
+                    rule.Order != null ? rule.Order.PriceMod : 1.0f,
+                    rule.Order != null ? rule.Order.Amount : 0);
+            }
+        }
+
+        private static void AppendGroupHeader(StringBuilder sb, string title)
+        {
+            sb.AppendLine("; ===== " + title + " =====");
+        }
+
+        private static void AppendKnownRule(StringBuilder sb, StoreBlockConfig config, string id)
+        {
+            var rule = FindRule(config, id);
+            if (rule == null)
+                return;
+
+            AppendItemRule(sb, rule.Id, rule.Allowed, rule.ForceInclude,
+                rule.Offer != null && rule.Offer.Enabled,
+                rule.Offer != null ? rule.Offer.PriceMod : 1.0f,
+                rule.Offer != null ? rule.Offer.Amount : 0,
+                rule.Order != null && rule.Order.Enabled,
+                rule.Order != null ? rule.Order.PriceMod : 1.0f,
+                rule.Order != null ? rule.Order.Amount : 0);
+        }
+
+        private static StoreItemRule FindRule(StoreBlockConfig config, string id)
+        {
+            if (config == null || config.ItemRules == null || string.IsNullOrWhiteSpace(id))
+                return null;
+
+            for (int i = 0; i < config.ItemRules.Count; i++)
+            {
+                var rule = config.ItemRules[i];
+                if (rule != null && string.Equals(rule.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return rule;
+            }
+
+            return null;
+        }
+
+        private static bool IsKnownVanillaComponent(string id)
+        {
+            switch (id)
+            {
+                case "MyObjectBuilder_Component/SteelPlate":
+                case "MyObjectBuilder_Component/Construction":
+                case "MyObjectBuilder_Component/InteriorPlate":
+                case "MyObjectBuilder_Component/Girder":
+                case "MyObjectBuilder_Component/SmallTube":
+                case "MyObjectBuilder_Component/LargeTube":
+                case "MyObjectBuilder_Component/MetalGrid":
+                case "MyObjectBuilder_Component/BulletproofGlass":
+                case "MyObjectBuilder_Component/Computer":
+                case "MyObjectBuilder_Component/Display":
+                case "MyObjectBuilder_Component/Detector":
+                case "MyObjectBuilder_Component/RadioCommunication":
+                case "MyObjectBuilder_Component/Motor":
+                case "MyObjectBuilder_Component/Reactor":
+                case "MyObjectBuilder_Component/Thrust":
+                case "MyObjectBuilder_Component/Superconductor":
+                case "MyObjectBuilder_Component/GravityGenerator":
+                case "MyObjectBuilder_Component/Explosives":
+                case "MyObjectBuilder_Component/Medical":
+                case "MyObjectBuilder_Component/PowerCell":
+                case "MyObjectBuilder_Component/SolarCell":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static void ParseIniLike(string text, StoreBlockConfig config)
