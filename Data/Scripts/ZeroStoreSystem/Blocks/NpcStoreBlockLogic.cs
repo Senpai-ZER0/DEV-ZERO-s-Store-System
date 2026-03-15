@@ -59,8 +59,6 @@ namespace ZeroStoreSystem.Blocks
         {
             base.UpdateAfterSimulation100();
 
-            Log.Info("UpdateAfterSimulation100 entered");
-
             if (_block == null || !_regenQueued)
                 return;
 

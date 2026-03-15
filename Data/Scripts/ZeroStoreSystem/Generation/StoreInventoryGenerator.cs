@@ -30,7 +30,7 @@ namespace ZeroStoreSystem.Generation
                 {
                     ItemId = steelPlateId,
                     Amount = 200,
-                    PricePerUnit = 15
+                    PricePerUnit = 100
                 });
             }
 
