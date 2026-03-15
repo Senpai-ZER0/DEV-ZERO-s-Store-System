@@ -165,7 +165,7 @@ namespace ZeroStoreSystem.Blocks
 
             _framesSinceRefresh = 0;
             Log.Info("Calling StoreRefreshService.RegenerateStore, reason=" + (_queuedReason ?? "<none>"));
-            _refreshService.Regenerate(_block, null);
+            _refreshService.Regenerate(_block, ZeroStoreSystem.Session.EconomySession.Instance != null ? ZeroStoreSystem.Session.EconomySession.Instance.GlobalConfig : null);
             _queuedReason = null;
         }
 

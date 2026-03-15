@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using VRage.Game;
+using ZeroStoreSystem.Config;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
 using ZeroStoreSystem.Domain;
@@ -18,31 +20,38 @@ namespace ZeroStoreSystem.Generation
                 return disabled;
             }
 
-            if (blockConfig.ItemRules == null || blockConfig.ItemRules.Count == 0)
-                return GenerateFallback(blockConfig, globalConfig);
+            var effectiveGlobalConfig = globalConfig ?? GlobalStoreConfigManager.GetDefaultConfig();
 
-            return GenerateFromConfig(blockConfig, globalConfig);
+            if (effectiveGlobalConfig == null || !effectiveGlobalConfig.UseGlobalRules)
+            {
+                if (blockConfig.ItemRules == null || blockConfig.ItemRules.Count == 0)
+                    return GenerateFallback(blockConfig, effectiveGlobalConfig);
+
+                return GenerateFromLocalOnly(blockConfig, effectiveGlobalConfig);
+            }
+
+            var mergedRules = StoreRuleMerger.Merge(effectiveGlobalConfig, blockConfig);
+
+            if (mergedRules == null || mergedRules.Count == 0)
+                return GenerateFallback(blockConfig, effectiveGlobalConfig);
+
+            return GenerateFromMerged(blockConfig, effectiveGlobalConfig, mergedRules);
         }
 
-        private StoreGenerationResult GenerateFromConfig(StoreBlockConfig blockConfig, GlobalStoreConfig globalConfig)
+        private StoreGenerationResult GenerateFromLocalOnly(StoreBlockConfig blockConfig, GlobalStoreConfig globalConfig)
         {
             var result = new StoreGenerationResult();
             result.ProfileId = string.IsNullOrWhiteSpace(blockConfig.ProfileId)
                 ? (globalConfig != null ? globalConfig.DefaultProfileId : "neutral")
                 : blockConfig.ProfileId;
 
-            foreach (var rule in blockConfig.ItemRules)
+            if (blockConfig.ItemRules == null || blockConfig.ItemRules.Count == 0)
+                return GenerateFallback(blockConfig, globalConfig);
+
+            for (int i = 0; i < blockConfig.ItemRules.Count; i++)
             {
-                if (rule == null)
-                    continue;
-
-                if (!rule.Allowed)
-                {
-                    result.Diagnostics.Add("Skipped item (Allowed=false): " + rule.Id);
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(rule.Id))
+                var rule = blockConfig.ItemRules[i];
+                if (rule == null || !rule.Allowed || string.IsNullOrWhiteSpace(rule.Id))
                     continue;
 
                 MyDefinitionId itemId;
@@ -58,7 +67,7 @@ namespace ZeroStoreSystem.Generation
 
                 int basePrice = BasePriceCalculator.GetBasePrice(itemId);
 
-                if (CanCreateOffer(blockConfig, rule))
+                if (CanCreateOffer(blockConfig.TradeMode, rule.Offer))
                 {
                     result.Offers.Add(new StoreEntryPlan
                     {
@@ -68,7 +77,7 @@ namespace ZeroStoreSystem.Generation
                     });
                 }
 
-                if (CanCreateOrder(blockConfig, rule))
+                if (CanCreateOrder(blockConfig.TradeMode, rule.Order))
                 {
                     result.Orders.Add(new StoreEntryPlan
                     {
@@ -79,7 +88,58 @@ namespace ZeroStoreSystem.Generation
                 }
             }
 
-            result.Diagnostics.Add("Inventory generated from ItemRules.");
+            result.Diagnostics.Add("Inventory generated from local ItemRules.");
+            return result;
+        }
+
+        private StoreGenerationResult GenerateFromMerged(StoreBlockConfig blockConfig, GlobalStoreConfig globalConfig, List<MergedStoreItemRule> mergedRules)
+        {
+            var result = new StoreGenerationResult();
+            result.ProfileId = string.IsNullOrWhiteSpace(blockConfig.ProfileId)
+                ? (globalConfig != null ? globalConfig.DefaultProfileId : "neutral")
+                : blockConfig.ProfileId;
+
+            for (int i = 0; i < mergedRules.Count; i++)
+            {
+                var rule = mergedRules[i];
+                if (rule == null || !rule.Allowed || string.IsNullOrWhiteSpace(rule.Id))
+                    continue;
+
+                MyDefinitionId itemId;
+                try
+                {
+                    itemId = MyDefinitionId.Parse(rule.Id);
+                }
+                catch (Exception e)
+                {
+                    Log.Error("Invalid merged item Id '" + rule.Id + "': " + e.Message);
+                    continue;
+                }
+
+                int basePrice = BasePriceCalculator.GetBasePrice(itemId);
+
+                if (CanCreateOffer(blockConfig.TradeMode, rule.Offer))
+                {
+                    result.Offers.Add(new StoreEntryPlan
+                    {
+                        ItemId = itemId,
+                        Amount = rule.Offer.Amount,
+                        PricePerUnit = BasePriceCalculator.ApplyPriceModifier(basePrice, rule.Offer.PriceMod)
+                    });
+                }
+
+                if (CanCreateOrder(blockConfig.TradeMode, rule.Order))
+                {
+                    result.Orders.Add(new StoreEntryPlan
+                    {
+                        ItemId = itemId,
+                        Amount = rule.Order.Amount,
+                        PricePerUnit = BasePriceCalculator.ApplyPriceModifier(basePrice, rule.Order.PriceMod)
+                    });
+                }
+            }
+
+            result.Diagnostics.Add("Inventory generated from merged global + block rules.");
             return result;
         }
 
@@ -117,35 +177,35 @@ namespace ZeroStoreSystem.Generation
             return result;
         }
 
-        private static bool CanCreateOffer(StoreBlockConfig config, StoreItemRule rule)
+        private static bool CanCreateOffer(StoreTradeMode tradeMode, StoreOfferRule offer)
         {
-            if (config.TradeMode == StoreTradeMode.BuyOnly)
+            if (tradeMode == StoreTradeMode.BuyOnly)
                 return false;
 
-            if (rule.Offer == null)
+            if (offer == null)
                 return false;
 
-            if (!rule.Offer.Enabled)
+            if (!offer.Enabled)
                 return false;
 
-            if (rule.Offer.Amount <= 0)
+            if (offer.Amount <= 0)
                 return false;
 
             return true;
         }
 
-        private static bool CanCreateOrder(StoreBlockConfig config, StoreItemRule rule)
+        private static bool CanCreateOrder(StoreTradeMode tradeMode, StoreOrderRule order)
         {
-            if (config.TradeMode == StoreTradeMode.SellOnly)
+            if (tradeMode == StoreTradeMode.SellOnly)
                 return false;
 
-            if (rule.Order == null)
+            if (order == null)
                 return false;
 
-            if (!rule.Order.Enabled)
+            if (!order.Enabled)
                 return false;
 
-            if (rule.Order.Amount <= 0)
+            if (order.Amount <= 0)
                 return false;
 
             return true;

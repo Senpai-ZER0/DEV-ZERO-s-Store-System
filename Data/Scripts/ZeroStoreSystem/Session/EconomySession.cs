@@ -1,5 +1,6 @@
 using Sandbox.ModAPI;
 using VRage.Game.Components;
+using ZeroStoreSystem.Config;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
 using ZeroStoreSystem.UI.Admin;
@@ -19,7 +20,7 @@ namespace ZeroStoreSystem.Session
         public override void LoadData()
         {
             Instance = this;
-            GlobalConfig = new GlobalStoreConfig();
+            GlobalConfig = GlobalStoreConfigManager.GetDefaultConfig();
             Log.Info("Session loaded.");
         }
 
@@ -64,6 +65,22 @@ namespace ZeroStoreSystem.Session
             AdminEditor = new StoreAdminRhfEditor();
             AdminEditor.Init();
             Log.Info("RHF admin editor initialized.");
+
+            // Make the editor immediately available in the RHF terminal for admins
+            // so opening via chat command remains optional.
+            if (AdminAccess.IsLocalAdminOrHigher() && AdminEditor != null)
+            {
+                try
+                {
+                    AdminEditor.OpenForLocalAdmin();
+                    RichHudFramework.UI.Client.RichHudTerminal.CloseMenu();
+                    Log.Info("RHF admin editor registered in terminal for local admin.");
+                }
+                catch (System.Exception e)
+                {
+                    Log.Error("Failed to register RHF admin editor automatically: " + e);
+                }
+            }
         }
 
         private void OnRichHudReset()

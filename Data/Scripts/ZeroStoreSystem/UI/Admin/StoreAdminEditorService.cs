@@ -6,6 +6,20 @@ namespace ZeroStoreSystem.UI.Admin
 {
     public static class StoreAdminEditorService
     {
+        public static bool TryOpenForLocalAdmin(IMyTerminalBlock block)
+        {
+            if (block == null)
+                return false;
+
+            if (!AdminAccess.IsLocalAdminOrHigher())
+            {
+                Log.Error("Admin editor access denied for non-admin user.");
+                return false;
+            }
+
+            return true;
+        }
+
         public static bool SaveToBlockOnly(IMyTerminalBlock block, StoreAdminEditorState state)
         {
             if (block == null || state == null)
@@ -28,7 +42,7 @@ namespace ZeroStoreSystem.UI.Admin
                 return false;
 
             var refresh = new StoreRefreshService();
-            refresh.Regenerate(cube, null);
+            refresh.Regenerate(cube, ZeroStoreSystem.Session.EconomySession.Instance != null ? ZeroStoreSystem.Session.EconomySession.Instance.GlobalConfig : null);
             return true;
         }
     }

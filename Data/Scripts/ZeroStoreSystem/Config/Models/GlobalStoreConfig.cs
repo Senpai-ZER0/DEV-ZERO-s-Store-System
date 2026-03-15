@@ -10,6 +10,7 @@ namespace ZeroStoreSystem.Config.Models
         public bool AutoRegisterNpcStores = true;
         public int RefreshIntervalTicks = 36000;
         public StoreTradeMode DefaultTradeMode = StoreTradeMode.BuyAndSell;
+        public bool UseGlobalRules = true;
         public List<StoreItemRule> GlobalItemRules = new List<StoreItemRule>();
     }
 }
