@@ -1,5 +1,6 @@
 using Sandbox.ModAPI;
 using VRage.Game.Components;
+using VRage.Input;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
 using RichHudFramework.Client;
@@ -16,6 +17,8 @@ namespace ZeroStoreSystem.Session
 
         private bool _chatHooked;
         private bool _rhfInitRequested;
+        private bool _ctrlBPressedLastTick;
+        private int _retryCounter;
 
         public override void LoadData()
         {
@@ -28,31 +31,34 @@ namespace ZeroStoreSystem.Session
         public override void BeforeStart()
         {
             base.BeforeStart();
-
-            if (MyAPIGateway.Utilities != null && !_chatHooked)
-            {
-                MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
-                _chatHooked = true;
-            }
-
-            if (!_rhfInitRequested)
-            {
-                _rhfInitRequested = true;
-                RichHudClient.Init("ZERO Store System", OnRichHudReady, OnRichHudReset);
-            }
+            EnsureChatHook();
+            EnsureRhfInit();
         }
-
 
         public override void UpdateAfterSimulation()
         {
             base.UpdateAfterSimulation();
 
+            EnsureChatHook();
+            EnsureRhfInit();
+
             if (AdminEditor != null)
             {
                 if (RichHudClient.Registered && !AdminEditor.Ready)
-                    AdminEditor.Init();
+                    TryInitEditor();
 
                 AdminEditor.RefreshAdminAccess();
+            }
+
+            HandleCtrlBHotkey();
+
+            // Periodic retry in case RHF comes up later than expected
+            _retryCounter++;
+            if (_retryCounter >= 120)
+            {
+                _retryCounter = 0;
+                if (AdminEditor != null && RichHudClient.Registered && !AdminEditor.Ready)
+                    TryInitEditor();
             }
         }
 
@@ -78,11 +84,30 @@ namespace ZeroStoreSystem.Session
             Instance = null;
         }
 
+        private void EnsureChatHook()
+        {
+            if (MyAPIGateway.Utilities != null && !_chatHooked)
+            {
+                MyAPIGateway.Utilities.MessageEntered += OnMessageEntered;
+                _chatHooked = true;
+                Log.Info("Chat hook attached.");
+            }
+        }
+
+        private void EnsureRhfInit()
+        {
+            if (!_rhfInitRequested)
+            {
+                _rhfInitRequested = true;
+                Log.Info("RHF init requested.");
+                RichHudClient.Init("ZERO Store System", OnRichHudReady, OnRichHudReset);
+            }
+        }
+
         private void OnRichHudReady()
         {
             Log.Info("RHF client ready.");
-            if (AdminEditor != null)
-                AdminEditor.Init();
+            TryInitEditor();
         }
 
         private void OnRichHudReset()
@@ -90,6 +115,47 @@ namespace ZeroStoreSystem.Session
             Log.Info("RHF client reset.");
             if (AdminEditor != null)
                 AdminEditor.Close();
+        }
+
+        private void TryInitEditor()
+        {
+            try
+            {
+                if (AdminEditor != null && !AdminEditor.Ready)
+                {
+                    Log.Info("Initializing RHF admin editor.");
+                    AdminEditor.Init();
+                }
+            }
+            catch (System.Exception e)
+            {
+                Log.Error("Failed to initialize RHF admin editor: " + e);
+            }
+        }
+
+        private void HandleCtrlBHotkey()
+        {
+            if (MyAPIGateway.Input == null || AdminEditor == null)
+                return;
+
+            bool ctrlHeld = MyAPIGateway.Input.IsAnyCtrlKeyPressed();
+            bool bPressed = MyAPIGateway.Input.IsKeyPress(MyKeys.B);
+            bool comboPressed = ctrlHeld && bPressed;
+
+            if (comboPressed && !_ctrlBPressedLastTick)
+            {
+                if (!AdminAccess.IsLocalAdminOrHigher())
+                {
+                    if (MyAPIGateway.Utilities != null)
+                        MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Admin access required.");
+                }
+                else if (!AdminEditor.OpenForLocalAdmin() && MyAPIGateway.Utilities != null)
+                {
+                    MyAPIGateway.Utilities.ShowMessage("ZERO Store", "RHF editor is not ready yet.");
+                }
+            }
+
+            _ctrlBPressedLastTick = comboPressed;
         }
 
         private void OnMessageEntered(string messageText, ref bool sendToOthers)
@@ -102,6 +168,7 @@ namespace ZeroStoreSystem.Session
                 return;
 
             sendToOthers = false;
+            Log.Info("Received command: " + msg);
 
             if (!AdminAccess.IsLocalAdminOrHigher())
             {
@@ -116,6 +183,9 @@ namespace ZeroStoreSystem.Session
                     MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Editor is not initialized yet.");
                 return;
             }
+
+            if (!AdminEditor.Ready)
+                TryInitEditor();
 
             if (!AdminEditor.OpenForLocalAdmin() && MyAPIGateway.Utilities != null)
                 MyAPIGateway.Utilities.ShowMessage("ZERO Store", "RHF editor is not ready yet.");

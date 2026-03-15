@@ -146,7 +146,6 @@ namespace ZeroStoreSystem.UI.Admin
 
             var filterTile1 = new ControlTile();
             _searchField = new TerminalTextField { Name = "Search" };
-            _searchField.Value = string.Empty;
             _searchField.ControlChanged += SearchChanged;
             _activeOnlyToggle = new TerminalOnOffButton { Name = "Active Only" };
             _activeOnlyToggle.Value = false;

@@ -10,16 +10,30 @@ namespace ZeroStoreSystem.Core
             if (MyAPIGateway.Session == null)
                 return false;
 
+            var player = MyAPIGateway.Session.Player;
+
+            // Singleplayer / local offline worlds should always be treated as admin-capable.
+            if (player != null && MyAPIGateway.Multiplayer != null && !MyAPIGateway.Multiplayer.MultiplayerActive)
+                return true;
+
             if (MyAPIGateway.Session.HasCreativeRights)
                 return true;
 
-            var player = MyAPIGateway.Session.Player;
             if (player == null)
                 return false;
 
             try
             {
-                return MyAPIGateway.Session.IsUserAdmin(player.SteamUserId);
+                if (MyAPIGateway.Session.IsUserAdmin(player.SteamUserId))
+                    return true;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                return player.PromoteLevel != 0;
             }
             catch
             {
