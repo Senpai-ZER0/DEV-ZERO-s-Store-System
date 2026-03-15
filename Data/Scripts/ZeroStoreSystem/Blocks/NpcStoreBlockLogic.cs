@@ -3,10 +3,9 @@ using Sandbox.ModAPI;
 using VRage.Game.Components;
 using VRage.Game.ModAPI;
 using VRage.ObjectBuilders;
-using VRage.Utils;
-using VRage.Game.ModAPI.Ingame.Utilities;
+using ZeroStoreSystem.Config;
 using ZeroStoreSystem.Config.Models;
-using ZeroStoreSystem.Session;
+using ZeroStoreSystem.Core;
 using ZeroStoreSystem.Sync;
 
 namespace ZeroStoreSystem.Blocks
@@ -14,61 +13,73 @@ namespace ZeroStoreSystem.Blocks
     [MyEntityComponentDescriptor(typeof(MyObjectBuilder_StoreBlock), false, "NpcStoreBlock")]
     public class NpcStoreBlockLogic : MyGameLogicComponent
     {
-        private IMyStoreBlock _storeBlock;
-        private readonly MyIni _ini = new MyIni();
-        private readonly StoreRefreshService _refreshService = new StoreRefreshService();
-        private StoreBlockConfig _localConfig = new StoreBlockConfig();
+        private IMyCubeBlock _block;
         private bool _initialized;
+        private bool _regenQueued;
 
         public override void Init(MyObjectBuilder_EntityBase objectBuilder)
         {
-            Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_100TH_FRAME;
-            _storeBlock = Entity as IMyStoreBlock;
+            base.Init(objectBuilder);
 
-            if (_storeBlock == null)
+            _block = Entity as IMyCubeBlock;
+            if (_block == null)
                 return;
 
-            NpcStoreRegistry.Register(Entity);
-            EnsureDefaultConfig();
-            _initialized = true;
-
-            if (MyAPIGateway.Session != null && MyAPIGateway.Session.IsServer)
-            {
-                MyLog.Default.WriteLine("[ZERO Store System] NpcStoreBlock initialized for entity " + Entity.EntityId);
-            }
+            Entity.NeedsUpdate |= MyEntityUpdateEnum.BEFORE_NEXT_FRAME;
+            Log.Info("NpcStoreBlockLogic.Init: entity=" + _block.EntityId);
         }
 
-        public override void Close()
+        public override void UpdateOnceBeforeFrame()
         {
-            NpcStoreRegistry.Unregister(Entity);
-            base.Close();
+            base.UpdateOnceBeforeFrame();
+
+            if (_block == null || _initialized)
+                return;
+
+            _initialized = true;
+            NpcStoreRegistry.Register(Entity);
+
+            var terminalBlock = _block as IMyTerminalBlock;
+            if (terminalBlock != null && string.IsNullOrWhiteSpace(terminalBlock.CustomData))
+            {
+                StoreConfigManager.WriteDefaultBlockConfig(terminalBlock);
+                Log.Info("Default CustomData written for entity=" + _block.EntityId);
+            }
+
+            _regenQueued = true;
+            Entity.NeedsUpdate |= MyEntityUpdateEnum.EACH_100TH_FRAME;
+            Log.Info("NpcStoreBlockLogic initialized: entity=" + _block.EntityId);
         }
 
         public override void UpdateAfterSimulation100()
         {
-            if (!_initialized || _storeBlock == null || MyAPIGateway.Session == null || !MyAPIGateway.Session.IsServer)
+            base.UpdateAfterSimulation100();
+
+            if (_block == null || !_regenQueued)
                 return;
 
-            // Temporary bootstrap behavior:
-            // runs once after init, then the session/services can take over in later iterations.
-            if (_initialized)
-            {
-                _refreshService.Regenerate(_localConfig, EconomySession.Instance != null ? EconomySession.Instance.GlobalConfig : new GlobalStoreConfig());
-                _initialized = false;
-            }
+            _regenQueued = false;
+
+            if (MyAPIGateway.Multiplayer == null || !MyAPIGateway.Multiplayer.IsServer)
+                return;
+
+            var globalConfig = ZeroStoreSystem.Session.EconomySession.Instance != null
+                ? ZeroStoreSystem.Session.EconomySession.Instance.GlobalConfig
+                : new GlobalStoreConfig();
+
+            var refreshService = new StoreRefreshService();
+            refreshService.Regenerate(_block, globalConfig);
         }
 
-        private void EnsureDefaultConfig()
+        public override void Close()
         {
-            if (!string.IsNullOrWhiteSpace(_storeBlock.CustomData))
-                return;
+            if (Entity != null)
+                NpcStoreRegistry.Unregister(Entity);
 
-            _ini.Clear();
-            _ini.Set("Store", "Enabled", true);
-            _ini.Set("Store", "UseAutoProfile", true);
-            _ini.Set("Store", "ProfileId", "");
-            _ini.Set("Store", "TradeMode", "BuyAndSell");
-            _storeBlock.CustomData = _ini.ToString();
+            if (_block != null)
+                Log.Info("NpcStoreBlockLogic.Close: entity=" + _block.EntityId);
+
+            base.Close();
         }
     }
 }

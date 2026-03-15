@@ -16,3 +16,10 @@ ZERO's Store System — первичный каркас мода
 
 Замечание:
 скриптовый каркас написан как стартовая основа и не проверялся компиляцией в Space Engineers.
+
+---
+Step2 update:
+- added TradeMode parser from CustomData
+- added test generator with SteelPlate offer and Construction order
+- added first regeneration flow and log output
+- StoreBlockSynchronizer still contains placeholders for real store API write calls

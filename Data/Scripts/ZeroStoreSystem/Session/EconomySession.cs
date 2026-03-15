@@ -1,7 +1,6 @@
-using Sandbox.ModAPI;
 using VRage.Game.Components;
-using VRage.Utils;
 using ZeroStoreSystem.Config.Models;
+using ZeroStoreSystem.Core;
 
 namespace ZeroStoreSystem.Session
 {
@@ -15,12 +14,12 @@ namespace ZeroStoreSystem.Session
         {
             Instance = this;
             GlobalConfig = new GlobalStoreConfig();
-            MyLog.Default.WriteLine("[ZERO Store System] Session loaded.");
+            Log.Info("Session loaded.");
         }
 
         protected override void UnloadData()
         {
-            MyLog.Default.WriteLine("[ZERO Store System] Session unloaded.");
+            Log.Info("Session unloaded.");
             GlobalConfig = null;
             Instance = null;
         }
