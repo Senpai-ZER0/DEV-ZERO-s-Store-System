@@ -4,7 +4,7 @@ using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
 using RichHudFramework.Client;
 using ZeroStoreSystem.UI.Admin;
-using VRage.Input;
+using ZeroStoreSystem.ShipOffers;
 
 namespace ZeroStoreSystem.Session
 {
@@ -17,11 +17,12 @@ namespace ZeroStoreSystem.Session
 
         private bool _chatHooked;
         private bool _rhfInitRequested;
-        private bool _ctrlBWasDown;
 
         public override void LoadData()
         {
             Instance = this;
+            StoreItemCatalog.Invalidate();
+            ShipStoreOfferCatalog.Invalidate();
             GlobalConfig = new GlobalStoreConfig();
             AdminEditor = new StoreAdminRhfEditor();
             Log.Info("Session loaded.");
@@ -55,43 +56,6 @@ namespace ZeroStoreSystem.Session
                     AdminEditor.Init();
 
                 AdminEditor.RefreshAdminAccess();
-            }
-
-            HandleOpenHotkey();
-        }
-
-        private void HandleOpenHotkey()
-        {
-            try
-            {
-                if (MyAPIGateway.Input == null || AdminEditor == null)
-                    return;
-
-                bool ctrlDown = MyAPIGateway.Input.IsAnyCtrlKeyPressed();
-                bool bDown = MyAPIGateway.Input.IsKeyPress(MyKeys.B);
-                bool comboDown = ctrlDown && bDown;
-
-                if (comboDown && !_ctrlBWasDown)
-                {
-                    _ctrlBWasDown = true;
-
-                    if (!AdminAccess.IsLocalAdminOrHigher())
-                    {
-                        if (MyAPIGateway.Utilities != null)
-                            MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Admin access required.");
-                        return;
-                    }
-
-                    if (!AdminEditor.OpenForLocalAdmin() && MyAPIGateway.Utilities != null)
-                        MyAPIGateway.Utilities.ShowMessage("ZERO Store", "RHF editor is not ready yet.");
-                }
-                else if (!comboDown)
-                {
-                    _ctrlBWasDown = false;
-                }
-            }
-            catch
-            {
             }
         }
 

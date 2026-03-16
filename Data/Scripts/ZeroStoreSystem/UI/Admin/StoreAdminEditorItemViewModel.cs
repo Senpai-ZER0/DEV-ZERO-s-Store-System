@@ -1,5 +1,6 @@
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
+using ZeroStoreSystem.ShipOffers.Models;
 
 namespace ZeroStoreSystem.UI.Admin
 {
@@ -10,11 +11,21 @@ namespace ZeroStoreSystem.UI.Admin
         public StoreItemRule Rule;
         public StoreItemCategory Category;
         public bool IsVanilla;
+        public string Description;
+        public ShipStoreOfferDefinition ShipOffer;
+
+        public bool IsShip => ShipOffer != null || Category == StoreItemCategory.Ship;
 
         public bool IsActive
         {
             get
             {
+                // Ship offers are catalog entries by default.
+                // Until separate ship-enable/disable settings are introduced,
+                // they should be shown as OFF by default in the editor.
+                if (IsShip)
+                    return false;
+
                 if (Rule == null)
                     return false;
 

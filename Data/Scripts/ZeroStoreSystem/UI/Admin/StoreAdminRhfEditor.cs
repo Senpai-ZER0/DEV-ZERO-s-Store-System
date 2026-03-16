@@ -26,6 +26,7 @@ namespace ZeroStoreSystem.UI.Admin
         private TerminalDropdown<string> _tradeModeDropdown;
         private TerminalTextField _refreshIntervalField;
 
+        private TerminalDropdown<string> _filterDropdown;
         private TerminalTextField _searchField;
         private TerminalOnOffButton _activeOnlyToggle;
         private TerminalButton _reloadButton;
@@ -145,12 +146,16 @@ namespace ZeroStoreSystem.UI.Admin
             };
 
             var filterTile1 = new ControlTile();
+            _filterDropdown = new TerminalDropdown<string> { Name = "Category" };
+            _filterDropdown.ControlChanged += FilterChanged;
+            PopulateFilters();
             _searchField = new TerminalTextField { Name = "Search" };
             _searchField.Value = string.Empty;
             _searchField.ControlChanged += SearchChanged;
             _activeOnlyToggle = new TerminalOnOffButton { Name = "Active Only" };
             _activeOnlyToggle.Value = false;
             _activeOnlyToggle.ControlChanged += ActiveOnlyChanged;
+            filterTile1.Add(_filterDropdown);
             filterTile1.Add(_searchField);
             filterTile1.Add(_activeOnlyToggle);
 
@@ -172,11 +177,11 @@ namespace ZeroStoreSystem.UI.Admin
             var itemCategory = new ControlCategory
             {
                 HeaderText = "Items",
-                SubheaderText = "Select a component from the filtered list to edit its rule."
+                SubheaderText = "Select an item or ship from the filtered list. Ships are listed for reference; item rules can be edited below."
             };
 
             var itemTile1 = new ControlTile();
-            _itemList = new TerminalList<string> { Name = "Component Rules" };
+            _itemList = new TerminalList<string> { Name = "Catalog Entries" };
             _itemList.ControlChanged += ItemSelectionChanged;
             _itemSummaryLabel = new TerminalLabel { Name = "No item selected." };
             itemTile1.Add(_itemList);
@@ -238,6 +243,17 @@ namespace ZeroStoreSystem.UI.Admin
             _tradeModeDropdown.List.Add(new RichText("BuyAndSell"), "BuyAndSell");
             _tradeModeDropdown.List.Add(new RichText("BuyOnly"), "BuyOnly");
             _tradeModeDropdown.List.Add(new RichText("SellOnly"), "SellOnly");
+        }
+
+        private void PopulateFilters()
+        {
+            _filterDropdown.List.Clear();
+            _filterDropdown.List.Add(new RichText("All"), nameof(StoreEditorFilter.All));
+            _filterDropdown.List.Add(new RichText("Components"), nameof(StoreEditorFilter.Components));
+            _filterDropdown.List.Add(new RichText("Ingots"), nameof(StoreEditorFilter.Ingots));
+            _filterDropdown.List.Add(new RichText("Ores"), nameof(StoreEditorFilter.Ores));
+            _filterDropdown.List.Add(new RichText("Ammo"), nameof(StoreEditorFilter.Ammo));
+            _filterDropdown.List.Add(new RichText("Ships"), nameof(StoreEditorFilter.Ships));
         }
 
         private void RefreshBlockList()
@@ -309,6 +325,9 @@ namespace ZeroStoreSystem.UI.Admin
             _storeEnabledToggle.Value = _state.Config != null && _state.Config.Enabled;
             _refreshIntervalField.Value = _state.Config != null ? _state.Config.RefreshIntervalSeconds.ToString() : "0";
             _tradeModeDropdown.List.SetSelection(_state.Config != null ? _state.Config.TradeMode.ToString() : "BuyAndSell");
+            _filterDropdown.List.SetSelection(_state.SelectedFilter.ToString());
+            _searchField.Value = _state.SearchText ?? string.Empty;
+            _activeOnlyToggle.Value = _state.ActiveOnly;
             _suppressEvents = false;
         }
 
@@ -391,8 +410,10 @@ namespace ZeroStoreSystem.UI.Admin
 
         private void RefreshSelectedItemControls()
         {
+            var selectedItem = _state.GetItemById(_selectedItemId);
             var rule = GetSelectedRule();
             bool hasRule = rule != null;
+            bool isShip = selectedItem != null && selectedItem.IsShip;
 
             _suppressEvents = true;
             _allowedToggle.Enabled = hasRule;
@@ -416,6 +437,23 @@ namespace ZeroStoreSystem.UI.Admin
                 _orderAmountField.Value = rule.Order != null ? rule.Order.Amount.ToString() : "0";
                 _itemSummaryLabel.Name = rule.Id;
             }
+            else if (isShip)
+            {
+                _allowedToggle.Value = false;
+                _forceIncludeToggle.Value = false;
+                _offerEnabledToggle.Value = false;
+                _offerPriceField.Value = string.Empty;
+                _offerAmountField.Value = string.Empty;
+                _orderEnabledToggle.Value = false;
+                _orderPriceField.Value = string.Empty;
+                _orderAmountField.Value = string.Empty;
+
+                var ship = selectedItem.ShipOffer;
+                if (ship != null)
+                    _itemSummaryLabel.Name = ship.DisplayName + " | " + ship.PrefabSubtypeId + " | Price: " + ship.Price;
+                else
+                    _itemSummaryLabel.Name = selectedItem.ShortName;
+            }
             else
             {
                 _allowedToggle.Value = false;
@@ -437,6 +475,7 @@ namespace ZeroStoreSystem.UI.Admin
             _storeEnabledToggle.Enabled = enabled;
             _tradeModeDropdown.Enabled = enabled;
             _refreshIntervalField.Enabled = enabled;
+            _filterDropdown.Enabled = enabled;
             _searchField.Enabled = enabled;
             _activeOnlyToggle.Enabled = enabled;
             _reloadButton.Enabled = enabled;
@@ -466,6 +505,22 @@ namespace ZeroStoreSystem.UI.Admin
                     return;
                 }
             }
+        }
+
+        private void FilterChanged(object sender, EventArgs e)
+        {
+            if (_suppressEvents)
+                return;
+
+            var selection = _filterDropdown.Value;
+            string value = selection != null ? selection.AssocObject : null;
+
+            StoreEditorFilter filter;
+            if (!Enum.TryParse(value, out filter))
+                filter = StoreEditorFilter.All;
+
+            _state.SelectedFilter = filter;
+            RefreshItemList();
         }
 
         private void SearchChanged(object sender, EventArgs e)

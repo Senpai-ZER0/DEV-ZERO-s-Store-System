@@ -5,6 +5,8 @@ using VRage.Game.ModAPI;
 using ZeroStoreSystem.Config;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
+using ZeroStoreSystem.ShipOffers;
+using ZeroStoreSystem.ShipOffers.Models;
 
 namespace ZeroStoreSystem.UI.Admin
 {
@@ -14,7 +16,8 @@ namespace ZeroStoreSystem.UI.Admin
         Components,
         Ingots,
         Ores,
-        Ammo
+        Ammo,
+        Ships
     }
 
     public class StoreAdminEditorState
@@ -58,6 +61,9 @@ namespace ZeroStoreSystem.UI.Admin
                 case StoreEditorFilter.Ammo:
                     query = query.Where(x => x != null && x.Category == StoreItemCategory.Ammo);
                     break;
+                case StoreEditorFilter.Ships:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Ship);
+                    break;
             }
 
             if (ActiveOnly)
@@ -67,8 +73,9 @@ namespace ZeroStoreSystem.UI.Admin
             {
                 string search = SearchText.Trim();
                 query = query.Where(x => x != null &&
-                    ((x.Id != null && x.Id.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                     (x.ShortName != null && x.ShortName.IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)));
+                    Contains(x.Id, search)
+                    || x != null && Contains(x.ShortName, search)
+                    || x != null && Contains(x.Description, search));
             }
 
             return query
@@ -76,6 +83,21 @@ namespace ZeroStoreSystem.UI.Admin
                 .ThenBy(x => x.IsVanilla ? 0 : 1)
                 .ThenBy(x => x.ShortName)
                 .ThenBy(x => x.Id);
+        }
+
+        public StoreAdminEditorItemViewModel GetItemById(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id))
+                return null;
+
+            for (int i = 0; i < Items.Count; i++)
+            {
+                var item = Items[i];
+                if (item != null && string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return item;
+            }
+
+            return null;
         }
 
         public void RebuildItems()
@@ -88,9 +110,9 @@ namespace ZeroStoreSystem.UI.Admin
             if (Config.ItemRules == null)
                 Config.ItemRules = new List<StoreItemRule>();
 
-            foreach (var id in StoreItemCatalog.EnumerateKnownVanillaIds())
+            foreach (var catalogItem in StoreItemCatalog.EnumerateCatalogItems())
             {
-                EnsureRule(id);
+                EnsureRule(catalogItem.Id);
             }
 
             for (int i = 0; i < Config.ItemRules.Count; i++)
@@ -103,9 +125,27 @@ namespace ZeroStoreSystem.UI.Admin
                 {
                     Id = rule.Id,
                     ShortName = GetShortName(rule.Id),
+                    Description = rule.Id,
                     Rule = rule,
                     Category = StoreItemCatalog.GetCategory(rule.Id),
                     IsVanilla = StoreItemCatalog.IsVanilla(rule.Id)
+                });
+            }
+
+            foreach (var ship in ShipStoreOfferCatalog.GetOffers())
+            {
+                if (ship == null || string.IsNullOrWhiteSpace(ship.Id))
+                    continue;
+
+                Items.Add(new StoreAdminEditorItemViewModel
+                {
+                    Id = ship.Id,
+                    ShortName = string.IsNullOrWhiteSpace(ship.DisplayName) ? ship.PrefabSubtypeId : ship.DisplayName,
+                    Description = ship.Description,
+                    Rule = null,
+                    ShipOffer = ship,
+                    Category = StoreItemCategory.Ship,
+                    IsVanilla = ship.IsVanilla
                 });
             }
         }
@@ -134,6 +174,11 @@ namespace ZeroStoreSystem.UI.Admin
                 return id.Substring(slash + 1);
 
             return id;
+        }
+
+        private static bool Contains(string haystack, string needle)
+        {
+            return !string.IsNullOrWhiteSpace(haystack) && haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }
