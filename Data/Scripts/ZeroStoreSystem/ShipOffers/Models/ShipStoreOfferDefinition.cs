@@ -1,3 +1,4 @@
+using VRage.Game;
 using VRageMath;
 
 namespace ZeroStoreSystem.ShipOffers.Models
@@ -8,23 +9,22 @@ namespace ZeroStoreSystem.ShipOffers.Models
         public string DisplayName = string.Empty;
         public string Description = string.Empty;
         public string PrefabSubtypeId = string.Empty;
+        public string TokenItemId = string.Empty;
         public string Icon = string.Empty;
         public int Price = 0;
-        public int Stock = -1;
-        public ShipSpawnMode SpawnMode = ShipSpawnMode.Auto;
-        public string ConnectorName = string.Empty;
-        public string ConnectorTag = string.Empty;
-        public Vector3D SpawnOffset = Vector3D.Zero;
-        public Vector3D SpawnCheckHalfExtents = new Vector3D(20, 20, 20);
-        public bool PlanetAllowed = true;
-        public bool SpaceAllowed = true;
-        public string FactionTag = string.Empty;
-        public string SourceModName = string.Empty;
+        public int Stock = 1;
         public bool IsVanilla = false;
+        public ShipSpawnMode SpawnMode = ShipSpawnMode.VanillaLike;
+        public string FactionTag = string.Empty;
+        public Vector3D SpawnOffset = new Vector3D(0d, 0d, 0d);
+        public Vector3D SpawnCheckHalfExtents = new Vector3D(40d, 20d, 40d);
 
-        public int GetOfferAmount()
+        public MyDefinitionId GetTokenDefinitionId()
         {
-            return Stock <= 0 ? 999999 : Stock;
+            if (string.IsNullOrWhiteSpace(TokenItemId))
+                return MyDefinitionId.Parse("MyObjectBuilder_Component/" + PrefabSubtypeId);
+
+            return MyDefinitionId.Parse(TokenItemId);
         }
     }
 }

@@ -14,15 +14,15 @@ namespace ZeroStoreSystem.UI.Admin
         public string Description;
         public ShipStoreOfferDefinition ShipOffer;
 
-        public bool IsShip => ShipOffer != null || Category == StoreItemCategory.Ship;
+        public bool IsShip
+        {
+            get { return ShipOffer != null || Category == StoreItemCategory.Ships; }
+        }
 
         public bool IsActive
         {
             get
             {
-                // Ship offers are catalog entries by default.
-                // Until separate ship-enable/disable settings are introduced,
-                // they should be shown as OFF by default in the editor.
                 if (IsShip)
                     return false;
 

@@ -1,7 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Sandbox.Definitions;
-using VRage.Game.Definitions;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.ShipOffers;
 using ZeroStoreSystem.ShipOffers.Models;
@@ -15,13 +13,12 @@ namespace ZeroStoreSystem.Core
         Ingot = 2,
         Ore = 3,
         Ammo = 4,
-        Ship = 5
+        Ships = 5
     }
 
-    public struct StoreCatalogItem
+    public class StoreCatalogItem
     {
         public string Id;
-        public string ShortName;
         public StoreItemCategory Category;
         public bool IsVanilla;
     }
@@ -101,39 +98,65 @@ namespace ZeroStoreSystem.Core
             "MyObjectBuilder_AmmoMagazine/ElitePistolMagazine"
         };
 
-        private static readonly List<StoreCatalogItem> _cachedItems = new List<StoreCatalogItem>();
-        private static bool _isBuilt;
-
-        public static IEnumerable<string> KnownShipOfferIds
+        public static readonly string[] KnownShipOfferIds =
         {
-            get
-            {
-                foreach (ShipStoreOfferDefinition offer in ShipStoreOfferCatalog.GetOffers())
-                {
-                    if (offer != null && !string.IsNullOrWhiteSpace(offer.Id))
-                        yield return offer.Id;
-                }
-            }
-        }
+            "MyObjectBuilder_Component/SCC Zeus MKI",
+            "MyObjectBuilder_Component/ATV-Survivor"
+        };
 
-        public static void Invalidate()
+        public static IEnumerable<string> EnumerateKnownVanillaIds()
         {
-            _cachedItems.Clear();
-            _isBuilt = false;
+            int i;
+            for (i = 0; i < VanillaComponentIds.Length; i++)
+                yield return VanillaComponentIds[i];
+            for (i = 0; i < VanillaIngotIds.Length; i++)
+                yield return VanillaIngotIds[i];
+            for (i = 0; i < VanillaOreIds.Length; i++)
+                yield return VanillaOreIds[i];
+            for (i = 0; i < VanillaAmmoIds.Length; i++)
+                yield return VanillaAmmoIds[i];
         }
 
         public static IEnumerable<StoreCatalogItem> EnumerateCatalogItems()
         {
-            EnsureBuilt();
-            return _cachedItems;
-        }
-
-        public static IEnumerable<string> EnumerateKnownVanillaIds()
-        {
-            foreach (var item in EnumerateCatalogItems())
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string id in EnumerateKnownVanillaIds())
             {
-                if (item.IsVanilla && item.Category != StoreItemCategory.Ship)
-                    yield return item.Id;
+                if (seen.Add(id))
+                {
+                    yield return new StoreCatalogItem
+                    {
+                        Id = id,
+                        Category = GetCategory(id),
+                        IsVanilla = true
+                    };
+                }
+            }
+
+            List<ShipStoreOfferDefinition> offers = ShipStoreOfferCatalog.GetOffers();
+            if (offers != null)
+            {
+                int i;
+                for (i = 0; i < offers.Count; i++)
+                {
+                    ShipStoreOfferDefinition offer = offers[i];
+                    if (offer == null)
+                        continue;
+
+                    string tokenId = offer.TokenItemId;
+                    if (string.IsNullOrWhiteSpace(tokenId) && !string.IsNullOrWhiteSpace(offer.PrefabSubtypeId))
+                        tokenId = "MyObjectBuilder_Component/" + offer.PrefabSubtypeId;
+
+                    if (string.IsNullOrWhiteSpace(tokenId) || !seen.Add(tokenId))
+                        continue;
+
+                    yield return new StoreCatalogItem
+                    {
+                        Id = tokenId,
+                        Category = StoreItemCategory.Ships,
+                        IsVanilla = offer.IsVanilla
+                    };
+                }
             }
         }
 
@@ -142,56 +165,39 @@ namespace ZeroStoreSystem.Core
             if (string.IsNullOrWhiteSpace(id))
                 return StoreItemCategory.Unknown;
 
+            if (Contains(KnownShipOfferIds, id))
+                return StoreItemCategory.Ships;
             if (id.StartsWith("MyObjectBuilder_Component/", StringComparison.OrdinalIgnoreCase))
                 return StoreItemCategory.Component;
-
             if (id.StartsWith("MyObjectBuilder_Ingot/", StringComparison.OrdinalIgnoreCase))
                 return StoreItemCategory.Ingot;
-
             if (id.StartsWith("MyObjectBuilder_Ore/", StringComparison.OrdinalIgnoreCase))
                 return StoreItemCategory.Ore;
-
             if (id.StartsWith("MyObjectBuilder_AmmoMagazine/", StringComparison.OrdinalIgnoreCase))
                 return StoreItemCategory.Ammo;
-
-            ShipStoreOfferDefinition offer;
-            if (ShipStoreOfferCatalog.TryGetById(id, out offer))
-                return StoreItemCategory.Ship;
 
             return StoreItemCategory.Unknown;
         }
 
         public static bool IsVanilla(string id)
         {
-            if (Contains(VanillaComponentIds, id)
+            return Contains(VanillaComponentIds, id)
                 || Contains(VanillaIngotIds, id)
                 || Contains(VanillaOreIds, id)
-                || Contains(VanillaAmmoIds, id))
-                return true;
-
-            ShipStoreOfferDefinition offer;
-            if (ShipStoreOfferCatalog.TryGetById(id, out offer))
-                return offer != null && offer.IsVanilla;
-
-            return false;
+                || Contains(VanillaAmmoIds, id)
+                || Contains(KnownShipOfferIds, id);
         }
 
         public static int GetCategorySortOrder(StoreItemCategory category)
         {
             switch (category)
             {
-                case StoreItemCategory.Component:
-                    return 0;
-                case StoreItemCategory.Ingot:
-                    return 1;
-                case StoreItemCategory.Ore:
-                    return 2;
-                case StoreItemCategory.Ammo:
-                    return 3;
-                case StoreItemCategory.Ship:
-                    return 4;
-                default:
-                    return 5;
+                case StoreItemCategory.Component: return 0;
+                case StoreItemCategory.Ingot: return 1;
+                case StoreItemCategory.Ore: return 2;
+                case StoreItemCategory.Ammo: return 3;
+                case StoreItemCategory.Ships: return 4;
+                default: return 5;
             }
         }
 
@@ -217,120 +223,13 @@ namespace ZeroStoreSystem.Core
             };
         }
 
-        private static void EnsureBuilt()
-        {
-            if (_isBuilt)
-                return;
-
-            _cachedItems.Clear();
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            AddKnownVanilla(_cachedItems, seen, VanillaComponentIds, StoreItemCategory.Component);
-            AddKnownVanilla(_cachedItems, seen, VanillaIngotIds, StoreItemCategory.Ingot);
-            AddKnownVanilla(_cachedItems, seen, VanillaOreIds, StoreItemCategory.Ore);
-            AddKnownVanilla(_cachedItems, seen, VanillaAmmoIds, StoreItemCategory.Ammo);
-
-            try
-            {
-                if (MyDefinitionManager.Static != null)
-                {
-                    foreach (var def in MyDefinitionManager.Static.GetAllDefinitions())
-                    {
-                        var physical = def as MyPhysicalItemDefinition;
-                        if (physical == null)
-                            continue;
-
-                        string id = BuildId(physical);
-                        var category = GetCategory(id);
-                        if (category == StoreItemCategory.Unknown)
-                            continue;
-
-                        if (seen.Add(id))
-                        {
-                            _cachedItems.Add(new StoreCatalogItem
-                            {
-                                Id = id,
-                                ShortName = GetShortName(id),
-                                Category = category,
-                                IsVanilla = false
-                            });
-                        }
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Error("StoreItemCatalog dynamic scan failed: " + e);
-            }
-
-            try
-            {
-                foreach (ShipStoreOfferDefinition offer in ShipStoreOfferCatalog.GetOffers())
-                {
-                    if (offer == null || string.IsNullOrWhiteSpace(offer.Id) || !seen.Add(offer.Id))
-                        continue;
-
-                    _cachedItems.Add(new StoreCatalogItem
-                    {
-                        Id = offer.Id,
-                        ShortName = string.IsNullOrWhiteSpace(offer.DisplayName) ? offer.PrefabSubtypeId : offer.DisplayName,
-                        Category = StoreItemCategory.Ship,
-                        IsVanilla = offer.IsVanilla
-                    });
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Error("StoreItemCatalog ship scan failed: " + e);
-            }
-
-            _isBuilt = true;
-        }
-
-        private static string BuildId(MyPhysicalItemDefinition def)
-        {
-            return def.Id.TypeId.ToString() + "/" + def.Id.SubtypeName;
-        }
-
-        private static void AddKnownVanilla(List<StoreCatalogItem> target, HashSet<string> seen, string[] ids, StoreItemCategory category)
-        {
-            if (ids == null)
-                return;
-
-            for (int i = 0; i < ids.Length; i++)
-            {
-                string id = ids[i];
-                if (string.IsNullOrWhiteSpace(id) || !seen.Add(id))
-                    continue;
-
-                target.Add(new StoreCatalogItem
-                {
-                    Id = id,
-                    ShortName = GetShortName(id),
-                    Category = category,
-                    IsVanilla = true
-                });
-            }
-        }
-
-        private static string GetShortName(string id)
-        {
-            if (string.IsNullOrWhiteSpace(id))
-                return string.Empty;
-
-            int slash = id.LastIndexOf('/');
-            if (slash >= 0 && slash < id.Length - 1)
-                return id.Substring(slash + 1);
-
-            return id;
-        }
-
         private static bool Contains(string[] ids, string id)
         {
             if (ids == null || string.IsNullOrWhiteSpace(id))
                 return false;
 
-            for (int i = 0; i < ids.Length; i++)
+            int i;
+            for (i = 0; i < ids.Length; i++)
             {
                 if (string.Equals(ids[i], id, StringComparison.OrdinalIgnoreCase))
                     return true;

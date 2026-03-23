@@ -58,42 +58,28 @@ namespace ZeroStoreSystem.Generation
                     continue;
                 }
 
-                ShipStoreOfferDefinition shipOffer;
-                bool isShipOffer = ShipStoreOfferCatalog.Instance.TryGetByItemId(itemId, out shipOffer);
-
-                if (isShipOffer)
-                {
-                    if (rule.Offer != null && rule.Offer.Enabled)
-                    {
-                        int offerAmount = rule.Offer.Amount > 0 ? rule.Offer.Amount : shipOffer.GetOfferAmount();
-                        int offerPrice = shipOffer.Price > 0 ? shipOffer.Price : 100000;
-
-                        if (offerAmount > 0)
-                        {
-                            result.Offers.Add(new StoreEntryPlan
-                            {
-                                ItemId = itemId,
-                                Amount = offerAmount,
-                                PricePerUnit = BasePriceCalculator.ApplyPriceModifier(offerPrice, rule.Offer.PriceMod)
-                            });
-                        }
-                    }
-
-                    if (rule.Order != null && rule.Order.Enabled)
-                        result.Diagnostics.Add("Ship orders are ignored in v1: " + rule.Id);
-
-                    continue;
-                }
-
                 int basePrice = BasePriceCalculator.GetBasePrice(itemId);
+                ShipStoreOfferDefinition shipOffer;
+                bool isShipOffer = ShipStoreOfferCatalog.TryGetByItemId(itemId, out shipOffer);
 
                 if (CanCreateOffer(blockConfig, rule))
                 {
+                    int offerAmount = rule.Offer.Amount;
+                    int offerPrice = BasePriceCalculator.ApplyPriceModifier(basePrice, rule.Offer.PriceMod);
+
+                    if (isShipOffer && shipOffer != null)
+                    {
+                        if (shipOffer.Stock > 0)
+                            offerAmount = shipOffer.Stock;
+                        if (shipOffer.Price > 0)
+                            offerPrice = shipOffer.Price;
+                    }
+
                     result.Offers.Add(new StoreEntryPlan
                     {
                         ItemId = itemId,
-                        Amount = rule.Offer.Amount,
-                        PricePerUnit = BasePriceCalculator.ApplyPriceModifier(basePrice, rule.Offer.PriceMod)
+                        Amount = offerAmount,
+                        PricePerUnit = offerPrice
                     });
                 }
 

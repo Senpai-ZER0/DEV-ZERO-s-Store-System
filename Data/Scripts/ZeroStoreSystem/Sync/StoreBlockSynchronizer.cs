@@ -12,6 +12,8 @@ using VRage.Game.Definitions;
 using ZeroStoreSystem.Core;
 using VRageMath;
 using ZeroStoreSystem.Domain;
+using ZeroStoreSystem.ShipOffers;
+using ZeroStoreSystem.ShipOffers.Models;
 
 namespace ZeroStoreSystem.Sync
 {
@@ -86,7 +88,10 @@ namespace ZeroStoreSystem.Sync
             Log.Info("AddOffer pricing: item=" + entry.ItemId + ", requested=" + entry.PricePerUnit + ", final=" + finalPrice);
 
             Action<int, int, long, long, long> callback = null;
-            if (IsPrefabOffer(entry.ItemId))
+            ShipStoreOfferDefinition shipOffer;
+            if (ShipStoreOfferCatalog.TryGetByItemId(entry.ItemId, out shipOffer))
+                callback = (amountSold, amountRemaining, totalPrice, ownerOfBlock, buyerSeller) => OnShipOfferTransaction(store, shipOffer, entry.ItemId, amountSold, totalPrice, buyerSeller);
+            else if (IsPrefabOffer(entry.ItemId))
                 callback = (amountSold, amountRemaining, totalPrice, ownerOfBlock, buyerSeller) => OnPrefabTransaction(store, entry.ItemId, amountSold, totalPrice, buyerSeller);
 
             long id;
@@ -242,6 +247,66 @@ namespace ZeroStoreSystem.Sync
             }
         }
 
+
+        private void OnShipOfferTransaction(Sandbox.ModAPI.IMyStoreBlock store, ShipStoreOfferDefinition offer, MyDefinitionId tokenItemId, int amountSold, long totalPrice, long buyerIdentityId)
+        {
+            if (offer == null)
+            {
+                RefundPlayer(buyerIdentityId, totalPrice, "Ship offer definition not found.");
+                return;
+            }
+
+            try
+            {
+                var prefab = MyDefinitionManager.Static.GetPrefabDefinition(offer.PrefabSubtypeId);
+                if (prefab == null)
+                {
+                    RefundPlayer(buyerIdentityId, totalPrice, "Prefab not found for ship offer: " + offer.PrefabSubtypeId);
+                    return;
+                }
+
+                var player = FindPlayerByIdentity(buyerIdentityId);
+                if (player == null || player.Character == null)
+                {
+                    RefundPlayer(buyerIdentityId, totalPrice, "Buyer player or character not found for ship offer purchase.");
+                    return;
+                }
+
+                if (!RemovePurchasedToken(player, tokenItemId, amountSold))
+                {
+                    RefundPlayer(buyerIdentityId, totalPrice, "Purchased ship token not found in buyer inventory.");
+                    return;
+                }
+
+                Vector3D spawnPos;
+                Vector3D forwardDir;
+                Vector3D upDir;
+                if (!TryFindPrefabSpawn(store, player, prefab, out spawnPos, out forwardDir, out upDir))
+                {
+                    RefundPlayer(buyerIdentityId, totalPrice, "No valid spawn position found for ship offer purchase.");
+                    return;
+                }
+
+                var options = SpawningOptions.RotateFirstCockpitTowardsDirection | SpawningOptions.SetAuthorship | SpawningOptions.UseOnlyWorldMatrix;
+                float naturalGravityInterference;
+                MyAPIGateway.Physics.CalculateNaturalGravityAt(spawnPos, out naturalGravityInterference);
+
+                if (naturalGravityInterference != 0f)
+                    MyVisualScriptLogicProvider.SpawnPrefabInGravity(offer.PrefabSubtypeId, spawnPos, forwardDir, ownerId: player.IdentityId, spawningOptions: options);
+                else
+                    MyVisualScriptLogicProvider.SpawnPrefab(offer.PrefabSubtypeId, spawnPos, forwardDir, upDir, ownerId: player.IdentityId, spawningOptions: options);
+
+                string gpsName = string.IsNullOrWhiteSpace(offer.DisplayName) ? offer.PrefabSubtypeId : offer.DisplayName;
+                MyVisualScriptLogicProvider.AddGPS(gpsName, gpsName, spawnPos, Color.Green, disappearsInS: 0, playerId: player.IdentityId);
+                Log.Info("Ship offer spawned from store purchase: offer=" + offer.Id + ", prefab=" + offer.PrefabSubtypeId + ", buyer=" + buyerIdentityId + ", price=" + totalPrice + ", pos=" + spawnPos);
+            }
+            catch (Exception e)
+            {
+                RefundPlayer(buyerIdentityId, totalPrice, "Ship offer purchase failed: " + e.Message);
+                Log.Error("OnShipOfferTransaction failed for " + tokenItemId + ": " + e);
+            }
+        }
+
         private IMyPlayer FindPlayerByIdentity(long identityId)
         {
             var players = new List<IMyPlayer>();
@@ -298,7 +363,7 @@ namespace ZeroStoreSystem.Sync
                 upDir = Vector3D.Normalize(surfacePosition - planet.PositionComp.GetPosition());
                 forwardDir = Vector3D.CalculatePerpendicularVector(upDir);
 
-                var freePlace = MyEntities.FindFreePlace(surfacePosition, (float)prefab.BoundingSphere.Radius);
+                var freePlace = MyEntities.FindFreePlace(surfacePosition, prefab.BoundingSphere.Radius);
                 if (!freePlace.HasValue)
                     return false;
 
@@ -307,7 +372,7 @@ namespace ZeroStoreSystem.Sync
             }
             else
             {
-                var freePlace = MyEntities.FindFreePlace(position, (float)prefab.BoundingSphere.Radius);
+                var freePlace = MyEntities.FindFreePlace(position, prefab.BoundingSphere.Radius);
                 if (!freePlace.HasValue)
                     return false;
 

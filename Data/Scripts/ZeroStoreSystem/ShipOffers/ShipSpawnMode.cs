@@ -2,8 +2,7 @@ namespace ZeroStoreSystem.ShipOffers
 {
     public enum ShipSpawnMode
     {
-        Auto,
-        ConnectorPreferred,
-        FlatSurfaceFallback
+        Auto = 0,
+        VanillaLike = 1
     }
 }

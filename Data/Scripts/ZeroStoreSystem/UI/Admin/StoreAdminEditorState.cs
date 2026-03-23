@@ -39,7 +39,6 @@ namespace ZeroStoreSystem.UI.Admin
             if (block == null || Config == null)
                 return;
 
-            RemoveLegacyShipRules();
             StoreConfigManager.SaveBlockConfig(block, Config);
             RebuildItems();
         }
@@ -63,7 +62,7 @@ namespace ZeroStoreSystem.UI.Admin
                     query = query.Where(x => x != null && x.Category == StoreItemCategory.Ammo);
                     break;
                 case StoreEditorFilter.Ships:
-                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Ship);
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Ships);
                     break;
             }
 
@@ -73,10 +72,9 @@ namespace ZeroStoreSystem.UI.Admin
             if (!string.IsNullOrWhiteSpace(SearchText))
             {
                 string search = SearchText.Trim();
-                query = query.Where(x => x != null &&
-                    (Contains(x.Id, search)
-                    || Contains(x.ShortName, search)
-                    || Contains(x.Description, search)));
+                query = query.Where(x => (x != null && Contains(x.Id, search))
+                    || (x != null && Contains(x.ShortName, search))
+                    || (x != null && Contains(x.Description, search)));
             }
 
             return query
@@ -91,9 +89,10 @@ namespace ZeroStoreSystem.UI.Admin
             if (string.IsNullOrWhiteSpace(id))
                 return null;
 
-            for (int i = 0; i < Items.Count; i++)
+            int i;
+            for (i = 0; i < Items.Count; i++)
             {
-                var item = Items[i];
+                StoreAdminEditorItemViewModel item = Items[i];
                 if (item != null && string.Equals(item.Id, id, StringComparison.OrdinalIgnoreCase))
                     return item;
             }
@@ -111,25 +110,22 @@ namespace ZeroStoreSystem.UI.Admin
             if (Config.ItemRules == null)
                 Config.ItemRules = new List<StoreItemRule>();
 
-            // Ships are catalog-only for now and should not create regular ItemRules.
-            foreach (var catalogItem in StoreItemCatalog.EnumerateCatalogItems())
+            foreach (StoreCatalogItem catalogItem in StoreItemCatalog.EnumerateCatalogItems())
             {
-                if (catalogItem.Category == StoreItemCategory.Ship)
+                if (catalogItem == null || string.IsNullOrWhiteSpace(catalogItem.Id))
+                    continue;
+
+                if (catalogItem.Category == StoreItemCategory.Ships)
                     continue;
 
                 EnsureRule(catalogItem.Id);
             }
 
-            for (int i = 0; i < Config.ItemRules.Count; i++)
+            int i;
+            for (i = 0; i < Config.ItemRules.Count; i++)
             {
-                var rule = Config.ItemRules[i];
+                StoreItemRule rule = Config.ItemRules[i];
                 if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
-                    continue;
-
-                var category = StoreItemCatalog.GetCategory(rule.Id);
-
-                // Do not render legacy ship token rules here; real ship entries are added below.
-                if (category == StoreItemCategory.Ship)
                     continue;
 
                 Items.Add(new StoreAdminEditorItemViewModel
@@ -138,56 +134,45 @@ namespace ZeroStoreSystem.UI.Admin
                     ShortName = GetShortName(rule.Id),
                     Description = rule.Id,
                     Rule = rule,
-                    Category = category,
+                    Category = StoreItemCatalog.GetCategory(rule.Id),
                     IsVanilla = StoreItemCatalog.IsVanilla(rule.Id)
                 });
             }
 
-            foreach (var ship in ShipStoreOfferCatalog.GetOffers())
+            List<ShipStoreOfferDefinition> offers = ShipStoreOfferCatalog.GetOffers();
+            if (offers != null)
             {
-                if (ship == null || string.IsNullOrWhiteSpace(ship.Id))
-                    continue;
-
-                Items.Add(new StoreAdminEditorItemViewModel
+                for (i = 0; i < offers.Count; i++)
                 {
-                    Id = ship.Id,
-                    ShortName = string.IsNullOrWhiteSpace(ship.DisplayName) ? ship.PrefabSubtypeId : ship.DisplayName,
-                    Description = ship.Description,
-                    Rule = null,
-                    ShipOffer = ship,
-                    Category = StoreItemCategory.Ship,
-                    IsVanilla = ship.IsVanilla
-                });
-            }
-        }
+                    ShipStoreOfferDefinition ship = offers[i];
+                    if (ship == null || string.IsNullOrWhiteSpace(ship.Id))
+                        continue;
 
-        private void RemoveLegacyShipRules()
-        {
-            if (Config == null || Config.ItemRules == null || Config.ItemRules.Count == 0)
-                return;
-
-            for (int i = Config.ItemRules.Count - 1; i >= 0; i--)
-            {
-                var rule = Config.ItemRules[i];
-                if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
-                    continue;
-
-                ShipStoreOfferDefinition offer;
-                if (ShipStoreOfferCatalog.TryGetById(rule.Id, out offer))
-                    Config.ItemRules.RemoveAt(i);
+                    Items.Add(new StoreAdminEditorItemViewModel
+                    {
+                        Id = ship.Id,
+                        ShortName = string.IsNullOrWhiteSpace(ship.DisplayName) ? ship.PrefabSubtypeId : ship.DisplayName,
+                        Description = ship.Description,
+                        Rule = null,
+                        ShipOffer = ship,
+                        Category = StoreItemCategory.Ships,
+                        IsVanilla = ship.IsVanilla
+                    });
+                }
             }
         }
 
         private StoreItemRule EnsureRule(string id)
         {
-            for (int i = 0; i < Config.ItemRules.Count; i++)
+            int i;
+            for (i = 0; i < Config.ItemRules.Count; i++)
             {
-                var rule = Config.ItemRules[i];
+                StoreItemRule rule = Config.ItemRules[i];
                 if (rule != null && string.Equals(rule.Id, id, StringComparison.OrdinalIgnoreCase))
                     return rule;
             }
 
-            var created = StoreItemCatalog.CreateDefaultRule(id);
+            StoreItemRule created = StoreItemCatalog.CreateDefaultRule(id);
             Config.ItemRules.Add(created);
             return created;
         }
