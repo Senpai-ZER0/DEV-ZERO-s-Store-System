@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using Sandbox.ModAPI;
 using VRage.Game;
@@ -90,35 +91,30 @@ namespace ZeroStoreSystem.ShipOffers
             if (string.IsNullOrWhiteSpace(xml))
                 return;
 
-            string root = ExtractTag(xml, "ShipStoreOffers");
-            if (string.IsNullOrWhiteSpace(root))
+            if (xml.IndexOf("<ShipStoreOffers", StringComparison.OrdinalIgnoreCase) < 0)
                 return;
 
-            List<string> offerBlocks = ExtractBlocks(root, "Offer");
-            for (int i = 0; i < offerBlocks.Count; i++)
+            int searchIndex = 0;
+            while (true)
             {
-                string block = offerBlocks[i];
+                int offerStart = IndexOfTag(xml, "Offer", searchIndex);
+                if (offerStart < 0)
+                    break;
 
-                var offer = new ShipStoreOfferDefinition
-                {
-                    Id = ReadString(block, "Id"),
-                    DisplayName = ReadString(block, "DisplayName"),
-                    Description = ReadString(block, "Description"),
-                    PrefabSubtypeId = ReadString(block, "PrefabSubtypeId"),
-                    Icon = ReadString(block, "Icon"),
-                    Price = ReadLong(block, "Price", 0),
-                    Stock = ReadInt(block, "Stock", -1),
-                    SpawnMode = ReadSpawnMode(block, "SpawnMode", ShipSpawnMode.Auto),
-                    ConnectorName = ReadString(block, "ConnectorName"),
-                    ConnectorTag = ReadString(block, "ConnectorTag"),
-                    SpawnOffset = ReadVector(block, "SpawnOffset", Vector3D.Zero),
-                    SpawnCheckHalfExtents = ReadVector(block, "SpawnCheckHalfExtents", new Vector3D(10, 10, 10)),
-                    PlanetAllowed = ReadBool(block, "PlanetAllowed", true),
-                    SpaceAllowed = ReadBool(block, "SpaceAllowed", true),
-                    FactionTag = ReadString(block, "FactionTag"),
-                    SourceModName = mod.Name,
-                    IsVanilla = string.Equals(mod.Name, "DEV ZERO's Store System", StringComparison.OrdinalIgnoreCase)
-                };
+                int contentStart = IndexOfTagEnd(xml, offerStart);
+                if (contentStart < 0)
+                    break;
+
+                int offerEnd = IndexOfClosingTag(xml, "Offer", contentStart);
+                if (offerEnd < 0)
+                    break;
+
+                string offerXml = xml.Substring(contentStart, offerEnd - contentStart);
+                searchIndex = offerEnd + "</Offer>".Length;
+
+                var offer = ParseSingleOffer(offerXml, mod);
+                if (offer == null)
+                    continue;
 
                 if (string.IsNullOrWhiteSpace(offer.Id) || string.IsNullOrWhiteSpace(offer.PrefabSubtypeId))
                     continue;
@@ -131,6 +127,32 @@ namespace ZeroStoreSystem.ShipOffers
 
                 target.Add(offer);
             }
+        }
+
+        private static ShipStoreOfferDefinition ParseSingleOffer(string offerXml, MyObjectBuilder_Checkpoint.ModItem mod)
+        {
+            var offer = new ShipStoreOfferDefinition
+            {
+                Id = ReadTagValue(offerXml, "Id"),
+                DisplayName = ReadTagValue(offerXml, "DisplayName"),
+                Description = ReadTagValue(offerXml, "Description"),
+                PrefabSubtypeId = ReadTagValue(offerXml, "PrefabSubtypeId"),
+                Icon = ReadTagValue(offerXml, "Icon"),
+                Price = ReadLongTag(offerXml, "Price", 0L),
+                Stock = ReadIntTag(offerXml, "Stock", -1),
+                SpawnMode = ReadSpawnModeTag(offerXml, "SpawnMode", ShipSpawnMode.Auto),
+                ConnectorName = ReadTagValue(offerXml, "ConnectorName"),
+                ConnectorTag = ReadTagValue(offerXml, "ConnectorTag"),
+                SpawnOffset = ReadVectorBlock(offerXml, "SpawnOffset", Vector3D.Zero),
+                SpawnCheckHalfExtents = ReadVectorBlock(offerXml, "SpawnCheckHalfExtents", new Vector3D(10d, 10d, 10d)),
+                PlanetAllowed = ReadBoolTag(offerXml, "PlanetAllowed", true),
+                SpaceAllowed = ReadBoolTag(offerXml, "SpaceAllowed", true),
+                FactionTag = ReadTagValue(offerXml, "FactionTag"),
+                SourceModName = mod.Name,
+                IsVanilla = string.Equals(mod.Name, "DEV ZERO's Store System", StringComparison.OrdinalIgnoreCase)
+            };
+
+            return offer;
         }
 
         private static int CompareOffers(ShipStoreOfferDefinition a, ShipStoreOfferDefinition b)
@@ -152,109 +174,97 @@ namespace ZeroStoreSystem.ShipOffers
             return string.Compare(idA, idB, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string ReadString(string block, string tag)
+        private static string ReadTagValue(string source, string tagName)
         {
-            string value = ExtractTag(block, tag);
-            return string.IsNullOrWhiteSpace(value) ? string.Empty : DecodeXml(value.Trim());
+            if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(tagName))
+                return string.Empty;
+
+            int start = IndexOfTag(source, tagName, 0);
+            if (start < 0)
+                return string.Empty;
+
+            int contentStart = IndexOfTagEnd(source, start);
+            if (contentStart < 0)
+                return string.Empty;
+
+            int end = IndexOfClosingTag(source, tagName, contentStart);
+            if (end < 0)
+                return string.Empty;
+
+            return source.Substring(contentStart, end - contentStart).Trim();
         }
 
-        private static int ReadInt(string block, string tag, int fallback)
+        private static int ReadIntTag(string source, string tagName, int fallback)
         {
             int value;
-            return int.TryParse(ReadString(block, tag), out value) ? value : fallback;
+            return int.TryParse(ReadTagValue(source, tagName), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
+                ? value
+                : fallback;
         }
 
-        private static long ReadLong(string block, string tag, long fallback)
+        private static long ReadLongTag(string source, string tagName, long fallback)
         {
             long value;
-            return long.TryParse(ReadString(block, tag), out value) ? value : fallback;
+            return long.TryParse(ReadTagValue(source, tagName), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
+                ? value
+                : fallback;
         }
 
-        private static bool ReadBool(string block, string tag, bool fallback)
+        private static bool ReadBoolTag(string source, string tagName, bool fallback)
         {
             bool value;
-            return bool.TryParse(ReadString(block, tag), out value) ? value : fallback;
+            return bool.TryParse(ReadTagValue(source, tagName), out value)
+                ? value
+                : fallback;
         }
 
-        private static ShipSpawnMode ReadSpawnMode(string block, string tag, ShipSpawnMode fallback)
+        private static ShipSpawnMode ReadSpawnModeTag(string source, string tagName, ShipSpawnMode fallback)
         {
-            string text = ReadString(block, tag);
+            string text = ReadTagValue(source, tagName);
             ShipSpawnMode mode;
             return Enum.TryParse(text, true, out mode) ? mode : fallback;
         }
 
-        private static Vector3D ReadVector(string block, string tag, Vector3D fallback)
+        private static Vector3D ReadVectorBlock(string source, string tagName, Vector3D fallback)
         {
-            string vectorBlock = ExtractTag(block, tag);
-            if (string.IsNullOrWhiteSpace(vectorBlock))
+            string block = ReadTagValue(source, tagName);
+            if (string.IsNullOrWhiteSpace(block))
                 return fallback;
 
-            double x, y, z;
-            if (!double.TryParse(ReadString(vectorBlock, "X"), out x)) x = fallback.X;
-            if (!double.TryParse(ReadString(vectorBlock, "Y"), out y)) y = fallback.Y;
-            if (!double.TryParse(ReadString(vectorBlock, "Z"), out z)) z = fallback.Z;
+            double x = ReadDoubleTag(block, "X", fallback.X);
+            double y = ReadDoubleTag(block, "Y", fallback.Y);
+            double z = ReadDoubleTag(block, "Z", fallback.Z);
             return new Vector3D(x, y, z);
         }
 
-        private static List<string> ExtractBlocks(string xml, string tag)
+        private static double ReadDoubleTag(string source, string tagName, double fallback)
         {
-            var list = new List<string>();
-            if (string.IsNullOrWhiteSpace(xml) || string.IsNullOrWhiteSpace(tag))
-                return list;
-
-            string openTag = "<" + tag + ">";
-            string closeTag = "</" + tag + ">";
-            int searchIndex = 0;
-
-            while (searchIndex < xml.Length)
-            {
-                int start = xml.IndexOf(openTag, searchIndex, StringComparison.OrdinalIgnoreCase);
-                if (start < 0)
-                    break;
-
-                start += openTag.Length;
-                int end = xml.IndexOf(closeTag, start, StringComparison.OrdinalIgnoreCase);
-                if (end < 0)
-                    break;
-
-                list.Add(xml.Substring(start, end - start));
-                searchIndex = end + closeTag.Length;
-            }
-
-            return list;
+            double value;
+            return double.TryParse(ReadTagValue(source, tagName), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out value)
+                ? value
+                : fallback;
         }
 
-        private static string ExtractTag(string xml, string tag)
+        private static int IndexOfTag(string source, string tagName, int startIndex)
         {
-            if (string.IsNullOrWhiteSpace(xml) || string.IsNullOrWhiteSpace(tag))
-                return string.Empty;
-
-            string openTag = "<" + tag + ">";
-            string closeTag = "</" + tag + ">";
-
-            int start = xml.IndexOf(openTag, StringComparison.OrdinalIgnoreCase);
-            if (start < 0)
-                return string.Empty;
-
-            start += openTag.Length;
-            int end = xml.IndexOf(closeTag, start, StringComparison.OrdinalIgnoreCase);
-            if (end < 0 || end < start)
-                return string.Empty;
-
-            return xml.Substring(start, end - start);
+            return source.IndexOf("<" + tagName, startIndex, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string DecodeXml(string value)
+        private static int IndexOfTagEnd(string source, int tagStartIndex)
         {
-            if (string.IsNullOrEmpty(value))
-                return string.Empty;
+            if (tagStartIndex < 0)
+                return -1;
 
-            return value
-                .Replace("&lt;", "<")
-                .Replace("&gt;", ">")
-                .Replace("&quot;", "\"")
-                .Replace("&apos;", "'")
-                .Replace("&amp;", "&");
+            int end = source.IndexOf('>', tagStartIndex);
+            if (end < 0)
+                return -1;
+
+            return end + 1;
+        }
+
+        private static int IndexOfClosingTag(string source, string tagName, int startIndex)
+        {
+            return source.IndexOf("</" + tagName + ">", startIndex, StringComparison.OrdinalIgnoreCase);
         }
     }
 }

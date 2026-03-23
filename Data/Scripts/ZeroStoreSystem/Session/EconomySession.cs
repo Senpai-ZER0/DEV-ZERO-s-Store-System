@@ -5,6 +5,7 @@ using ZeroStoreSystem.Core;
 using RichHudFramework.Client;
 using ZeroStoreSystem.UI.Admin;
 using ZeroStoreSystem.ShipOffers;
+using VRage.Input;
 
 namespace ZeroStoreSystem.Session
 {
@@ -57,6 +58,8 @@ namespace ZeroStoreSystem.Session
 
                 AdminEditor.RefreshAdminAccess();
             }
+
+            HandleHotkeys();
         }
 
         protected override void UnloadData()
@@ -79,6 +82,34 @@ namespace ZeroStoreSystem.Session
             AdminEditor = null;
             GlobalConfig = null;
             Instance = null;
+        }
+
+
+        private void HandleHotkeys()
+        {
+            if (MyAPIGateway.Input == null || MyAPIGateway.Gui == null)
+                return;
+
+            if (!AdminAccess.IsLocalAdminOrHigher())
+                return;
+
+            if (!MyAPIGateway.Input.IsAnyCtrlKeyPressed() || !MyAPIGateway.Input.IsNewKeyPressed(MyKeys.B))
+                return;
+
+            if (AdminEditor == null)
+            {
+                Notify("Editor is not initialized yet.");
+                return;
+            }
+
+            if (!AdminEditor.OpenForLocalAdmin())
+                Notify("RHF editor is not ready yet.");
+        }
+
+        private static void Notify(string message)
+        {
+            if (MyAPIGateway.Utilities != null && !string.IsNullOrWhiteSpace(message))
+                MyAPIGateway.Utilities.ShowMessage("ZERO Store", message);
         }
 
         private void OnRichHudReady()
@@ -108,20 +139,18 @@ namespace ZeroStoreSystem.Session
 
             if (!AdminAccess.IsLocalAdminOrHigher())
             {
-                if (MyAPIGateway.Utilities != null)
-                    MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Admin access required.");
+                Notify("Admin access required.");
                 return;
             }
 
             if (AdminEditor == null)
             {
-                if (MyAPIGateway.Utilities != null)
-                    MyAPIGateway.Utilities.ShowMessage("ZERO Store", "Editor is not initialized yet.");
+                Notify("Editor is not initialized yet.");
                 return;
             }
 
-            if (!AdminEditor.OpenForLocalAdmin() && MyAPIGateway.Utilities != null)
-                MyAPIGateway.Utilities.ShowMessage("ZERO Store", "RHF editor is not ready yet.");
+            if (!AdminEditor.OpenForLocalAdmin())
+                Notify("RHF editor is not ready yet.");
         }
     }
 }
