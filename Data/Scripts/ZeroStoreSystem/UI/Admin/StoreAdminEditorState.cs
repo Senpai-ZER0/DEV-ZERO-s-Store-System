@@ -109,6 +109,8 @@ namespace ZeroStoreSystem.UI.Admin
 
             if (Config.ItemRules == null)
                 Config.ItemRules = new List<StoreItemRule>();
+            if (Config.ShipOfferRules == null)
+                Config.ShipOfferRules = new List<ShipOfferRule>();
 
             foreach (StoreCatalogItem catalogItem in StoreItemCatalog.EnumerateCatalogItems())
             {
@@ -155,6 +157,7 @@ namespace ZeroStoreSystem.UI.Admin
                         Description = ship.Description,
                         Rule = null,
                         ShipOffer = ship,
+                        ShipRule = FindShipRule(ship.Id),
                         Category = StoreItemCategory.Ships,
                         IsVanilla = ship.IsVanilla
                     });
@@ -175,6 +178,39 @@ namespace ZeroStoreSystem.UI.Admin
             StoreItemRule created = StoreItemCatalog.CreateDefaultRule(id);
             Config.ItemRules.Add(created);
             return created;
+        }
+
+
+        public ShipOfferRule GetShipRuleById(string id)
+        {
+            return FindShipRule(id);
+        }
+
+        public ShipOfferRule EnsureShipRule(string id)
+        {
+            var existing = FindShipRule(id);
+            if (existing != null)
+                return existing;
+
+            var created = new ShipOfferRule();
+            created.Id = id;
+            Config.ShipOfferRules.Add(created);
+            return created;
+        }
+
+        private ShipOfferRule FindShipRule(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id) || Config == null || Config.ShipOfferRules == null)
+                return null;
+
+            for (int i = 0; i < Config.ShipOfferRules.Count; i++)
+            {
+                var rule = Config.ShipOfferRules[i];
+                if (rule != null && string.Equals(rule.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return rule;
+            }
+
+            return null;
         }
 
         private static string GetShortName(string id)

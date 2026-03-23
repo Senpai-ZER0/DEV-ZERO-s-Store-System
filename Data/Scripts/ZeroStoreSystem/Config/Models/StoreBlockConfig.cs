@@ -12,5 +12,6 @@ namespace ZeroStoreSystem.Config.Models
         public StoreTradeMode TradeMode = StoreTradeMode.BuyAndSell;
         public int RefreshIntervalSeconds = 0;
         public List<StoreItemRule> ItemRules = new List<StoreItemRule>();
+        public List<ShipOfferRule> ShipOfferRules = new List<ShipOfferRule>();
     }
 }

@@ -63,6 +63,7 @@ namespace ZeroStoreSystem.Config
             sb.AppendLine();
 
             AppendItemGroups(sb, config);
+            AppendShipOfferGroups(sb, config);
             return sb.ToString();
         }
 
@@ -215,6 +216,43 @@ namespace ZeroStoreSystem.Config
                 rule.Order != null && rule.Order.Enabled,
                 rule.Order != null ? rule.Order.PriceMod : 1.0f,
                 rule.Order != null ? rule.Order.Amount : 0);
+        }
+
+
+        private static void AppendShipOfferGroups(StringBuilder sb, StoreBlockConfig config)
+        {
+            if (config == null || config.ShipOfferRules == null || config.ShipOfferRules.Count == 0)
+                return;
+
+            AppendGroupHeader(sb, "Ships");
+
+            for (int i = 0; i < config.ShipOfferRules.Count; i++)
+            {
+                var rule = config.ShipOfferRules[i];
+                if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
+                    continue;
+
+                sb.AppendLine("[ShipOffer:" + rule.Id + "]");
+                sb.AppendLine("Enabled=" + rule.Enabled.ToString().ToLowerInvariant());
+                sb.AppendLine("PriceOverride=" + rule.PriceOverride.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine("StockOverride=" + rule.StockOverride.ToString(CultureInfo.InvariantCulture));
+                sb.AppendLine();
+            }
+        }
+
+        private static ShipOfferRule FindShipRule(StoreBlockConfig config, string id)
+        {
+            if (config == null || config.ShipOfferRules == null || string.IsNullOrWhiteSpace(id))
+                return null;
+
+            for (int i = 0; i < config.ShipOfferRules.Count; i++)
+            {
+                var rule = config.ShipOfferRules[i];
+                if (rule != null && string.Equals(rule.Id, id, StringComparison.OrdinalIgnoreCase))
+                    return rule;
+            }
+
+            return null;
         }
 
         private static StoreItemRule FindRule(StoreBlockConfig config, string id)
@@ -381,6 +419,25 @@ namespace ZeroStoreSystem.Config
                 default:
                     Log.Error("Unknown TradeMode '" + value + "', fallback to BuyAndSell");
                     return StoreTradeMode.BuyAndSell;
+            }
+        }
+
+        private static void ParseShipOfferRuleKey(ShipOfferRule rule, string key, string value)
+        {
+            if (rule == null)
+                return;
+
+            switch (key)
+            {
+                case "Enabled":
+                    rule.Enabled = ParseBool(value, rule.Enabled);
+                    break;
+                case "PriceOverride":
+                    rule.PriceOverride = ParseInt(value, rule.PriceOverride);
+                    break;
+                case "StockOverride":
+                    rule.StockOverride = ParseInt(value, rule.StockOverride);
+                    break;
             }
         }
 

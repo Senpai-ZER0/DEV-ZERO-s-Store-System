@@ -13,6 +13,7 @@ namespace ZeroStoreSystem.UI.Admin
         public bool IsVanilla;
         public string Description;
         public ShipStoreOfferDefinition ShipOffer;
+        public ShipOfferRule ShipRule;
 
         public bool IsShip
         {
@@ -24,7 +25,7 @@ namespace ZeroStoreSystem.UI.Admin
             get
             {
                 if (IsShip)
-                    return false;
+                    return ShipRule != null && ShipRule.Enabled;
 
                 if (Rule == null)
                     return false;
