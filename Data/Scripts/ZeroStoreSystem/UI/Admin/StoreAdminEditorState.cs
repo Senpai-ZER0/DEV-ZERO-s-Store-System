@@ -39,6 +39,7 @@ namespace ZeroStoreSystem.UI.Admin
             if (block == null || Config == null)
                 return;
 
+            RemoveLegacyShipRules();
             StoreConfigManager.SaveBlockConfig(block, Config);
             RebuildItems();
         }
@@ -73,9 +74,9 @@ namespace ZeroStoreSystem.UI.Admin
             {
                 string search = SearchText.Trim();
                 query = query.Where(x => x != null &&
-                    Contains(x.Id, search)
-                    || x != null && Contains(x.ShortName, search)
-                    || x != null && Contains(x.Description, search));
+                    (Contains(x.Id, search)
+                    || Contains(x.ShortName, search)
+                    || Contains(x.Description, search)));
             }
 
             return query
@@ -110,8 +111,12 @@ namespace ZeroStoreSystem.UI.Admin
             if (Config.ItemRules == null)
                 Config.ItemRules = new List<StoreItemRule>();
 
+            // Ships are catalog-only for now and should not create regular ItemRules.
             foreach (var catalogItem in StoreItemCatalog.EnumerateCatalogItems())
             {
+                if (catalogItem.Category == StoreItemCategory.Ship)
+                    continue;
+
                 EnsureRule(catalogItem.Id);
             }
 
@@ -121,13 +126,19 @@ namespace ZeroStoreSystem.UI.Admin
                 if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
                     continue;
 
+                var category = StoreItemCatalog.GetCategory(rule.Id);
+
+                // Do not render legacy ship token rules here; real ship entries are added below.
+                if (category == StoreItemCategory.Ship)
+                    continue;
+
                 Items.Add(new StoreAdminEditorItemViewModel
                 {
                     Id = rule.Id,
                     ShortName = GetShortName(rule.Id),
                     Description = rule.Id,
                     Rule = rule,
-                    Category = StoreItemCatalog.GetCategory(rule.Id),
+                    Category = category,
                     IsVanilla = StoreItemCatalog.IsVanilla(rule.Id)
                 });
             }
@@ -147,6 +158,23 @@ namespace ZeroStoreSystem.UI.Admin
                     Category = StoreItemCategory.Ship,
                     IsVanilla = ship.IsVanilla
                 });
+            }
+        }
+
+        private void RemoveLegacyShipRules()
+        {
+            if (Config == null || Config.ItemRules == null || Config.ItemRules.Count == 0)
+                return;
+
+            for (int i = Config.ItemRules.Count - 1; i >= 0; i--)
+            {
+                var rule = Config.ItemRules[i];
+                if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
+                    continue;
+
+                ShipStoreOfferDefinition offer;
+                if (ShipStoreOfferCatalog.TryGetById(rule.Id, out offer))
+                    Config.ItemRules.RemoveAt(i);
             }
         }
 
