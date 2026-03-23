@@ -393,14 +393,6 @@ namespace ZeroStoreSystem.UI.Admin
             RefreshSelectedItemControls();
         }
 
-        private ShipOfferRule GetSelectedShipRule()
-        {
-            if (string.IsNullOrWhiteSpace(_selectedItemId))
-                return null;
-
-            return _state.GetShipRuleById(_selectedItemId);
-        }
-
         private StoreItemRule GetSelectedRule()
         {
             if (string.IsNullOrWhiteSpace(_selectedItemId) || _state.Config == null || _state.Config.ItemRules == null)
@@ -420,7 +412,6 @@ namespace ZeroStoreSystem.UI.Admin
         {
             var selectedItem = _state.GetItemById(_selectedItemId);
             var rule = GetSelectedRule();
-            var shipRule = GetSelectedShipRule();
             bool hasRule = rule != null;
             bool isShip = selectedItem != null && selectedItem.IsShip;
 
@@ -433,7 +424,6 @@ namespace ZeroStoreSystem.UI.Admin
             _orderEnabledToggle.Enabled = hasRule;
             _orderPriceField.Enabled = hasRule;
             _orderAmountField.Enabled = hasRule;
-            _allowedToggle.Name = isShip ? "Ship Enabled" : "Allowed";
 
             if (hasRule)
             {
@@ -449,6 +439,7 @@ namespace ZeroStoreSystem.UI.Admin
             }
             else if (isShip)
             {
+                var shipRule = selectedItem != null && selectedItem.ShipOffer != null ? _state.FindShipOfferRule(selectedItem.ShipOffer.Id) : null;
                 _allowedToggle.Value = shipRule != null && shipRule.Enabled;
                 _forceIncludeToggle.Value = false;
                 _offerEnabledToggle.Value = false;
@@ -460,13 +451,12 @@ namespace ZeroStoreSystem.UI.Admin
 
                 var ship = selectedItem.ShipOffer;
                 if (ship != null)
-                    _itemSummaryLabel.Name = ship.DisplayName + " | " + ship.PrefabSubtypeId + " | Price: " + ship.Price + " | Enabled: " + ((shipRule != null && shipRule.Enabled) ? "Yes" : "No");
+                    _itemSummaryLabel.Name = ship.DisplayName + " | " + ship.PrefabSubtypeId + " | Price: " + ship.Price;
                 else
                     _itemSummaryLabel.Name = selectedItem.ShortName;
             }
             else
             {
-                _allowedToggle.Name = "Allowed";
                 _allowedToggle.Value = false;
                 _forceIncludeToggle.Value = false;
                 _offerEnabledToggle.Value = false;
@@ -600,12 +590,12 @@ namespace ZeroStoreSystem.UI.Admin
                 return;
 
             var selectedItem = _state.GetItemById(_selectedItemId);
-            if (selectedItem != null && selectedItem.IsShip)
+            if (selectedItem != null && selectedItem.IsShip && selectedItem.ShipOffer != null)
             {
-                var shipRule = _state.EnsureShipRule(_selectedItemId);
+                var shipRule = _state.EnsureShipOfferRule(selectedItem.ShipOffer.Id);
                 shipRule.Enabled = _allowedToggle.Value;
+                selectedItem.ShipEnabled = shipRule.Enabled;
                 RefreshItemList();
-                RefreshSelectedItemControls();
                 return;
             }
 
@@ -746,7 +736,6 @@ namespace ZeroStoreSystem.UI.Admin
             }
             else
             {
-                _allowedToggle.Name = "Allowed";
                 Notify("Failed to save store config.");
             }
         }
@@ -767,7 +756,6 @@ namespace ZeroStoreSystem.UI.Admin
             }
             else
             {
-                _allowedToggle.Name = "Allowed";
                 Notify("Failed to regenerate store.");
             }
         }

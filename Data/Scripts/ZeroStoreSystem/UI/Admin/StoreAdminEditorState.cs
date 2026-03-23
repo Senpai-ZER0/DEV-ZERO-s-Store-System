@@ -130,6 +130,9 @@ namespace ZeroStoreSystem.UI.Admin
                 if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
                     continue;
 
+                if (StoreItemCatalog.GetCategory(rule.Id) == StoreItemCategory.Ships)
+                    continue;
+
                 Items.Add(new StoreAdminEditorItemViewModel
                 {
                     Id = rule.Id,
@@ -150,6 +153,7 @@ namespace ZeroStoreSystem.UI.Admin
                     if (ship == null || string.IsNullOrWhiteSpace(ship.Id))
                         continue;
 
+                    ShipOfferRule shipRule = FindShipOfferRule(ship.Id);
                     Items.Add(new StoreAdminEditorItemViewModel
                     {
                         Id = ship.Id,
@@ -157,7 +161,7 @@ namespace ZeroStoreSystem.UI.Admin
                         Description = ship.Description,
                         Rule = null,
                         ShipOffer = ship,
-                        ShipRule = FindShipRule(ship.Id),
+                        ShipEnabled = shipRule != null && shipRule.Enabled,
                         Category = StoreItemCategory.Ships,
                         IsVanilla = ship.IsVanilla
                     });
@@ -180,37 +184,31 @@ namespace ZeroStoreSystem.UI.Admin
             return created;
         }
 
-
-        public ShipOfferRule GetShipRuleById(string id)
+        public ShipOfferRule FindShipOfferRule(string id)
         {
-            return FindShipRule(id);
-        }
-
-        public ShipOfferRule EnsureShipRule(string id)
-        {
-            var existing = FindShipRule(id);
-            if (existing != null)
-                return existing;
-
-            var created = new ShipOfferRule();
-            created.Id = id;
-            Config.ShipOfferRules.Add(created);
-            return created;
-        }
-
-        private ShipOfferRule FindShipRule(string id)
-        {
-            if (string.IsNullOrWhiteSpace(id) || Config == null || Config.ShipOfferRules == null)
+            if (Config == null || Config.ShipOfferRules == null || string.IsNullOrWhiteSpace(id))
                 return null;
 
             for (int i = 0; i < Config.ShipOfferRules.Count; i++)
             {
-                var rule = Config.ShipOfferRules[i];
+                ShipOfferRule rule = Config.ShipOfferRules[i];
                 if (rule != null && string.Equals(rule.Id, id, StringComparison.OrdinalIgnoreCase))
                     return rule;
             }
 
             return null;
+        }
+
+        public ShipOfferRule EnsureShipOfferRule(string id)
+        {
+            ShipOfferRule rule = FindShipOfferRule(id);
+            if (rule != null)
+                return rule;
+
+            rule = new ShipOfferRule();
+            rule.Id = id;
+            Config.ShipOfferRules.Add(rule);
+            return rule;
         }
 
         private static string GetShortName(string id)

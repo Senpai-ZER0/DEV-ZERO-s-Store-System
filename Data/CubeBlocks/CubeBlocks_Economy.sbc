@@ -47,12 +47,12 @@
         <Z>1</Z>
       </InventorySize>
       <MountPoints>
-        <MountPoint Side="Bottom" StartX="0" StartY="0" EndX="1" EndY="1" />
-        <MountPoint Side="Top" StartX="0" StartY="0" EndX="1" EndY="1" />
-        <MountPoint Side="Left" StartX="0" StartY="0" EndX="1" EndY="1" />
-      </MountPoints>
-      <MirroringY>Z</MirroringY>
-      <MirroringZ>Y</MirroringZ>
+		<MountPoint Side="Bottom" StartX="0" StartY="0" EndX="1" EndY="1" />
+		<MountPoint Side="Top" StartX="0" StartY="0" EndX="1" EndY="1" />
+		<MountPoint Side="Left" StartX="0" StartY="0" EndX="1" EndY="1" />
+	</MountPoints>
+	<MirroringY>X</MirroringY>
+	<MirroringX>Y</MirroringX>
       <DamageEffectName>Damage_HeavyMech_Damaged</DamageEffectName>
       <DamagedSound>ParticleHeavyMech</DamagedSound>
       <ActionSound>BlockCollect</ActionSound>

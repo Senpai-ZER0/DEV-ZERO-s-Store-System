@@ -28,7 +28,7 @@ namespace ZeroStoreSystem.Config
 
                 Log.Info(
                     "Store config loaded for '" + block.CustomName + "', " +
-                    "TradeMode=" + config.TradeMode + ", Enabled=" + config.Enabled + ", RefreshIntervalSeconds=" + config.RefreshIntervalSeconds + ", ItemRules=" + config.ItemRules.Count);
+                    "TradeMode=" + config.TradeMode + ", Enabled=" + config.Enabled + ", RefreshIntervalSeconds=" + config.RefreshIntervalSeconds + ", ItemRules=" + config.ItemRules.Count + ", ShipOfferRules=" + config.ShipOfferRules.Count);
             }
             catch (Exception e)
             {
@@ -133,11 +133,6 @@ namespace ZeroStoreSystem.Config
                     AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
             }
 
-            foreach (var id in StoreItemCatalog.KnownShipOfferIds)
-            {
-                if (FindRule(config, id) == null)
-                    AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
-            }
         }
 
         private static void AddRule(StoreBlockConfig config, string itemId, bool allowed, bool forceInclude, bool offerEnabled, float offerPriceMod, int offerAmount, bool orderEnabled, float orderPriceMod, int orderAmount)
@@ -170,7 +165,7 @@ namespace ZeroStoreSystem.Config
                 if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
                     continue;
 
-                if (StoreItemCatalog.IsVanilla(rule.Id))
+                if (StoreItemCatalog.IsVanilla(rule.Id) || StoreItemCatalog.GetCategory(rule.Id) == StoreItemCategory.Ships)
                     continue;
 
                 AppendItemRule(sb, rule.Id, rule.Allowed, rule.ForceInclude,
@@ -240,7 +235,7 @@ namespace ZeroStoreSystem.Config
             }
         }
 
-        private static ShipOfferRule FindShipRule(StoreBlockConfig config, string id)
+        private static ShipOfferRule FindShipOfferRule(StoreBlockConfig config, string id)
         {
             if (config == null || config.ShipOfferRules == null || string.IsNullOrWhiteSpace(id))
                 return null;
@@ -254,7 +249,6 @@ namespace ZeroStoreSystem.Config
 
             return null;
         }
-
         private static StoreItemRule FindRule(StoreBlockConfig config, string id)
         {
             if (config == null || config.ItemRules == null || string.IsNullOrWhiteSpace(id))
@@ -282,6 +276,7 @@ namespace ZeroStoreSystem.Config
 
             string currentSection = string.Empty;
             StoreItemRule currentItemRule = null;
+            ShipOfferRule currentShipRule = null;
 
             var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
@@ -301,6 +296,7 @@ namespace ZeroStoreSystem.Config
 
                     currentSection = string.Empty;
                     currentItemRule = null;
+                    currentShipRule = null;
 
                     if (sectionName.Equals("Store", StringComparison.OrdinalIgnoreCase))
                     {
@@ -315,6 +311,17 @@ namespace ZeroStoreSystem.Config
                             currentItemRule = new StoreItemRule();
                             currentItemRule.Id = itemId;
                             config.ItemRules.Add(currentItemRule);
+                        }
+                    }
+                    else if (sectionName.StartsWith("ShipOffer:", StringComparison.OrdinalIgnoreCase))
+                    {
+                        string shipOfferId = sectionName.Substring("ShipOffer:".Length).Trim();
+                        if (!string.IsNullOrWhiteSpace(shipOfferId))
+                        {
+                            currentSection = "ShipOffer";
+                            currentShipRule = new ShipOfferRule();
+                            currentShipRule.Id = shipOfferId;
+                            config.ShipOfferRules.Add(currentShipRule);
                         }
                     }
 
@@ -335,6 +342,10 @@ namespace ZeroStoreSystem.Config
                 else if (currentSection == "Item" && currentItemRule != null)
                 {
                     ParseItemKey(currentItemRule, key, value);
+                }
+                else if (currentSection == "ShipOffer" && currentShipRule != null)
+                {
+                    ParseShipOfferKey(currentShipRule, key, value);
                 }
             }
         }
@@ -403,6 +414,22 @@ namespace ZeroStoreSystem.Config
             }
         }
 
+        private static void ParseShipOfferKey(ShipOfferRule rule, string key, string value)
+        {
+            switch (key)
+            {
+                case "Enabled":
+                    rule.Enabled = ParseBool(value, rule.Enabled);
+                    break;
+                case "PriceOverride":
+                    rule.PriceOverride = ParseInt(value, rule.PriceOverride);
+                    break;
+                case "StockOverride":
+                    rule.StockOverride = ParseInt(value, rule.StockOverride);
+                    break;
+            }
+        }
+
         private static StoreTradeMode ParseTradeMode(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -419,25 +446,6 @@ namespace ZeroStoreSystem.Config
                 default:
                     Log.Error("Unknown TradeMode '" + value + "', fallback to BuyAndSell");
                     return StoreTradeMode.BuyAndSell;
-            }
-        }
-
-        private static void ParseShipOfferRuleKey(ShipOfferRule rule, string key, string value)
-        {
-            if (rule == null)
-                return;
-
-            switch (key)
-            {
-                case "Enabled":
-                    rule.Enabled = ParseBool(value, rule.Enabled);
-                    break;
-                case "PriceOverride":
-                    rule.PriceOverride = ParseInt(value, rule.PriceOverride);
-                    break;
-                case "StockOverride":
-                    rule.StockOverride = ParseInt(value, rule.StockOverride);
-                    break;
             }
         }
 

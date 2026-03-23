@@ -1,5 +1,3 @@
-using System;
-
 namespace ZeroStoreSystem.Config.Models
 {
     public class ShipOfferRule
