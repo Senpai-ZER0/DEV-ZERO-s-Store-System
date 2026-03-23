@@ -298,7 +298,7 @@ namespace ZeroStoreSystem.Sync
                 upDir = Vector3D.Normalize(surfacePosition - planet.PositionComp.GetPosition());
                 forwardDir = Vector3D.CalculatePerpendicularVector(upDir);
 
-                var freePlace = MyEntities.FindFreePlace(surfacePosition, prefab.BoundingSphere.Radius);
+                var freePlace = MyEntities.FindFreePlace(surfacePosition, (float)prefab.BoundingSphere.Radius);
                 if (!freePlace.HasValue)
                     return false;
 
@@ -307,7 +307,7 @@ namespace ZeroStoreSystem.Sync
             }
             else
             {
-                var freePlace = MyEntities.FindFreePlace(position, prefab.BoundingSphere.Radius);
+                var freePlace = MyEntities.FindFreePlace(position, (float)prefab.BoundingSphere.Radius);
                 if (!freePlace.HasValue)
                     return false;
 

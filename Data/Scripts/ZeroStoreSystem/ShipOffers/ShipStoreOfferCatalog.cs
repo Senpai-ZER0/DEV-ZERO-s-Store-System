@@ -17,6 +17,31 @@ namespace ZeroStoreSystem.ShipOffers
         private static readonly List<ShipStoreOfferDefinition> _offers = new List<ShipStoreOfferDefinition>();
         private static bool _loaded;
 
+        public sealed class Accessor
+        {
+            public IEnumerable<ShipStoreOfferDefinition> GetOffers()
+            {
+                return ShipStoreOfferCatalog.GetOffers();
+            }
+
+            public bool TryGetById(string id, out ShipStoreOfferDefinition offer)
+            {
+                return ShipStoreOfferCatalog.TryGetById(id, out offer);
+            }
+
+            public bool TryGetByItemId(MyDefinitionId itemId, out ShipStoreOfferDefinition offer)
+            {
+                return ShipStoreOfferCatalog.TryGetByItemId(itemId, out offer);
+            }
+
+            public void Invalidate()
+            {
+                ShipStoreOfferCatalog.Invalidate();
+            }
+        }
+
+        public static readonly Accessor Instance = new Accessor();
+
         public static void Invalidate()
         {
             _offers.Clear();
@@ -32,11 +57,37 @@ namespace ZeroStoreSystem.ShipOffers
         public static bool TryGetById(string id, out ShipStoreOfferDefinition offer)
         {
             EnsureLoaded();
+
             for (int i = 0; i < _offers.Count; i++)
             {
-                if (string.Equals(_offers[i].Id, id, StringComparison.OrdinalIgnoreCase))
+                ShipStoreOfferDefinition current = _offers[i];
+                if (current != null && string.Equals(current.Id, id, StringComparison.OrdinalIgnoreCase))
                 {
-                    offer = _offers[i];
+                    offer = current;
+                    return true;
+                }
+            }
+
+            offer = null;
+            return false;
+        }
+
+        public static bool TryGetByItemId(MyDefinitionId itemId, out ShipStoreOfferDefinition offer)
+        {
+            EnsureLoaded();
+
+            string subtype = itemId.SubtypeName ?? string.Empty;
+
+            for (int i = 0; i < _offers.Count; i++)
+            {
+                ShipStoreOfferDefinition current = _offers[i];
+                if (current == null)
+                    continue;
+
+                if (string.Equals(current.Id, subtype, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(current.PrefabSubtypeId, subtype, StringComparison.OrdinalIgnoreCase))
+                {
+                    offer = current;
                     return true;
                 }
             }
@@ -56,15 +107,15 @@ namespace ZeroStoreSystem.ShipOffers
             if (MyAPIGateway.Session == null || MyAPIGateway.Utilities == null)
                 return;
 
-            var mods = MyAPIGateway.Session.Mods;
+            List<MyObjectBuilder_Checkpoint.ModItem> mods = MyAPIGateway.Session.Mods;
             if (mods == null)
                 return;
 
-            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             for (int i = 0; i < mods.Count; i++)
             {
-                var mod = mods[i];
+                MyObjectBuilder_Checkpoint.ModItem mod = mods[i];
                 try
                 {
                     if (!MyAPIGateway.Utilities.FileExistsInModLocation(RelativeFilePath, mod))
@@ -91,180 +142,141 @@ namespace ZeroStoreSystem.ShipOffers
             if (string.IsNullOrWhiteSpace(xml))
                 return;
 
-            if (xml.IndexOf("<ShipStoreOffers", StringComparison.OrdinalIgnoreCase) < 0)
-                return;
-
-            int searchIndex = 0;
+            int position = 0;
             while (true)
             {
-                int offerStart = IndexOfTag(xml, "Offer", searchIndex);
+                int offerStart = xml.IndexOf("<Offer>", position, StringComparison.OrdinalIgnoreCase);
                 if (offerStart < 0)
                     break;
 
-                int contentStart = IndexOfTagEnd(xml, offerStart);
-                if (contentStart < 0)
-                    break;
-
-                int offerEnd = IndexOfClosingTag(xml, "Offer", contentStart);
+                int contentStart = offerStart + 7;
+                int offerEnd = xml.IndexOf("</Offer>", contentStart, StringComparison.OrdinalIgnoreCase);
                 if (offerEnd < 0)
                     break;
 
                 string offerXml = xml.Substring(contentStart, offerEnd - contentStart);
-                searchIndex = offerEnd + "</Offer>".Length;
+                ShipStoreOfferDefinition offer = ParseOfferBlock(offerXml, mod);
+                if (offer != null && !string.IsNullOrWhiteSpace(offer.Id) && seen.Add(offer.Id))
+                    target.Add(offer);
 
-                var offer = ParseSingleOffer(offerXml, mod);
-                if (offer == null)
-                    continue;
-
-                if (string.IsNullOrWhiteSpace(offer.Id) || string.IsNullOrWhiteSpace(offer.PrefabSubtypeId))
-                    continue;
-
-                if (!seen.Add(offer.Id))
-                    continue;
-
-                if (string.IsNullOrWhiteSpace(offer.DisplayName))
-                    offer.DisplayName = offer.PrefabSubtypeId;
-
-                target.Add(offer);
+                position = offerEnd + 8;
             }
         }
 
-        private static ShipStoreOfferDefinition ParseSingleOffer(string offerXml, MyObjectBuilder_Checkpoint.ModItem mod)
+        private static ShipStoreOfferDefinition ParseOfferBlock(string offerXml, MyObjectBuilder_Checkpoint.ModItem mod)
         {
-            var offer = new ShipStoreOfferDefinition
-            {
-                Id = ReadTagValue(offerXml, "Id"),
-                DisplayName = ReadTagValue(offerXml, "DisplayName"),
-                Description = ReadTagValue(offerXml, "Description"),
-                PrefabSubtypeId = ReadTagValue(offerXml, "PrefabSubtypeId"),
-                Icon = ReadTagValue(offerXml, "Icon"),
-                Price = ReadLongTag(offerXml, "Price", 0L),
-                Stock = ReadIntTag(offerXml, "Stock", -1),
-                SpawnMode = ReadSpawnModeTag(offerXml, "SpawnMode", ShipSpawnMode.Auto),
-                ConnectorName = ReadTagValue(offerXml, "ConnectorName"),
-                ConnectorTag = ReadTagValue(offerXml, "ConnectorTag"),
-                SpawnOffset = ReadVectorBlock(offerXml, "SpawnOffset", Vector3D.Zero),
-                SpawnCheckHalfExtents = ReadVectorBlock(offerXml, "SpawnCheckHalfExtents", new Vector3D(10d, 10d, 10d)),
-                PlanetAllowed = ReadBoolTag(offerXml, "PlanetAllowed", true),
-                SpaceAllowed = ReadBoolTag(offerXml, "SpaceAllowed", true),
-                FactionTag = ReadTagValue(offerXml, "FactionTag"),
-                SourceModName = mod.Name,
-                IsVanilla = string.Equals(mod.Name, "DEV ZERO's Store System", StringComparison.OrdinalIgnoreCase)
-            };
+            if (string.IsNullOrWhiteSpace(offerXml))
+                return null;
+
+            ShipStoreOfferDefinition offer = new ShipStoreOfferDefinition();
+            offer.Id = ReadTag(offerXml, "Id");
+            offer.DisplayName = ReadTag(offerXml, "DisplayName");
+            offer.Description = ReadTag(offerXml, "Description");
+            offer.PrefabSubtypeId = ReadTag(offerXml, "PrefabSubtypeId");
+            offer.Icon = ReadTag(offerXml, "Icon");
+            offer.Price = ReadInt(ReadTag(offerXml, "Price"), 0);
+            offer.Stock = ReadInt(ReadTag(offerXml, "Stock"), -1);
+            offer.SpawnMode = ReadSpawnMode(ReadTag(offerXml, "SpawnMode"), ShipSpawnMode.Auto);
+            offer.ConnectorName = ReadTag(offerXml, "ConnectorName");
+            offer.ConnectorTag = ReadTag(offerXml, "ConnectorTag");
+            offer.SpawnOffset = ReadVector3D(ReadTag(offerXml, "SpawnOffset"), Vector3D.Zero);
+            offer.SpawnCheckHalfExtents = ReadVector3D(ReadTag(offerXml, "SpawnCheckHalfExtents"), new Vector3D(10d, 10d, 10d));
+            offer.PlanetAllowed = ReadBool(ReadTag(offerXml, "PlanetAllowed"), true);
+            offer.SpaceAllowed = ReadBool(ReadTag(offerXml, "SpaceAllowed"), true);
+            offer.FactionTag = ReadTag(offerXml, "FactionTag");
+            offer.SourceModName = mod.Name;
+            offer.IsVanilla = string.Equals(mod.Name, "DEV ZERO's Store System", StringComparison.OrdinalIgnoreCase);
+
+            if (string.IsNullOrWhiteSpace(offer.DisplayName))
+                offer.DisplayName = offer.PrefabSubtypeId;
+
+            if (string.IsNullOrWhiteSpace(offer.Id) || string.IsNullOrWhiteSpace(offer.PrefabSubtypeId))
+                return null;
 
             return offer;
         }
 
         private static int CompareOffers(ShipStoreOfferDefinition a, ShipStoreOfferDefinition b)
         {
-            int vanillaA = a != null && a.IsVanilla ? 0 : 1;
-            int vanillaB = b != null && b.IsVanilla ? 0 : 1;
+            int vanillaA = (a != null && a.IsVanilla) ? 0 : 1;
+            int vanillaB = (b != null && b.IsVanilla) ? 0 : 1;
             int cmp = vanillaA.CompareTo(vanillaB);
             if (cmp != 0)
                 return cmp;
 
-            string nameA = a != null ? a.DisplayName ?? a.Id : string.Empty;
-            string nameB = b != null ? b.DisplayName ?? b.Id : string.Empty;
+            string nameA = a != null ? (a.DisplayName ?? a.Id ?? string.Empty) : string.Empty;
+            string nameB = b != null ? (b.DisplayName ?? b.Id ?? string.Empty) : string.Empty;
             cmp = string.Compare(nameA, nameB, StringComparison.OrdinalIgnoreCase);
             if (cmp != 0)
                 return cmp;
 
-            string idA = a != null ? a.Id ?? string.Empty : string.Empty;
-            string idB = b != null ? b.Id ?? string.Empty : string.Empty;
+            string idA = a != null ? (a.Id ?? string.Empty) : string.Empty;
+            string idB = b != null ? (b.Id ?? string.Empty) : string.Empty;
             return string.Compare(idA, idB, StringComparison.OrdinalIgnoreCase);
         }
 
-        private static string ReadTagValue(string source, string tagName)
+        private static string ReadTag(string xml, string tagName)
         {
-            if (string.IsNullOrWhiteSpace(source) || string.IsNullOrWhiteSpace(tagName))
+            if (string.IsNullOrWhiteSpace(xml) || string.IsNullOrWhiteSpace(tagName))
                 return string.Empty;
 
-            int start = IndexOfTag(source, tagName, 0);
+            string openTag = "<" + tagName + ">";
+            string closeTag = "</" + tagName + ">";
+
+            int start = xml.IndexOf(openTag, StringComparison.OrdinalIgnoreCase);
             if (start < 0)
                 return string.Empty;
 
-            int contentStart = IndexOfTagEnd(source, start);
-            if (contentStart < 0)
+            start += openTag.Length;
+            int end = xml.IndexOf(closeTag, start, StringComparison.OrdinalIgnoreCase);
+            if (end < 0 || end < start)
                 return string.Empty;
 
-            int end = IndexOfClosingTag(source, tagName, contentStart);
-            if (end < 0)
-                return string.Empty;
-
-            return source.Substring(contentStart, end - contentStart).Trim();
+            return xml.Substring(start, end - start).Trim();
         }
 
-        private static int ReadIntTag(string source, string tagName, int fallback)
-        {
-            int value;
-            return int.TryParse(ReadTagValue(source, tagName), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
-                ? value
-                : fallback;
-        }
-
-        private static long ReadLongTag(string source, string tagName, long fallback)
-        {
-            long value;
-            return long.TryParse(ReadTagValue(source, tagName), NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
-                ? value
-                : fallback;
-        }
-
-        private static bool ReadBoolTag(string source, string tagName, bool fallback)
+        private static bool ReadBool(string text, bool fallback)
         {
             bool value;
-            return bool.TryParse(ReadTagValue(source, tagName), out value)
-                ? value
-                : fallback;
+            return bool.TryParse(text, out value) ? value : fallback;
         }
 
-        private static ShipSpawnMode ReadSpawnModeTag(string source, string tagName, ShipSpawnMode fallback)
+        private static int ReadInt(string text, int fallback)
         {
-            string text = ReadTagValue(source, tagName);
-            ShipSpawnMode mode;
-            return Enum.TryParse(text, true, out mode) ? mode : fallback;
+            int value;
+            return int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ? value : fallback;
         }
 
-        private static Vector3D ReadVectorBlock(string source, string tagName, Vector3D fallback)
+        private static ShipSpawnMode ReadSpawnMode(string text, ShipSpawnMode fallback)
         {
-            string block = ReadTagValue(source, tagName);
-            if (string.IsNullOrWhiteSpace(block))
+            if (string.IsNullOrWhiteSpace(text))
                 return fallback;
 
-            double x = ReadDoubleTag(block, "X", fallback.X);
-            double y = ReadDoubleTag(block, "Y", fallback.Y);
-            double z = ReadDoubleTag(block, "Z", fallback.Z);
+            ShipSpawnMode mode;
+            return Enum.TryParse<ShipSpawnMode>(text, true, out mode) ? mode : fallback;
+        }
+
+        private static Vector3D ReadVector3D(string xml, Vector3D fallback)
+        {
+            if (string.IsNullOrWhiteSpace(xml))
+                return fallback;
+
+            double x = fallback.X;
+            double y = fallback.Y;
+            double z = fallback.Z;
+
+            string xs = ReadTag(xml, "X");
+            string ys = ReadTag(xml, "Y");
+            string zs = ReadTag(xml, "Z");
+
+            if (!string.IsNullOrWhiteSpace(xs))
+                double.TryParse(xs, NumberStyles.Float, CultureInfo.InvariantCulture, out x);
+            if (!string.IsNullOrWhiteSpace(ys))
+                double.TryParse(ys, NumberStyles.Float, CultureInfo.InvariantCulture, out y);
+            if (!string.IsNullOrWhiteSpace(zs))
+                double.TryParse(zs, NumberStyles.Float, CultureInfo.InvariantCulture, out z);
+
             return new Vector3D(x, y, z);
-        }
-
-        private static double ReadDoubleTag(string source, string tagName, double fallback)
-        {
-            double value;
-            return double.TryParse(ReadTagValue(source, tagName), NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out value)
-                ? value
-                : fallback;
-        }
-
-        private static int IndexOfTag(string source, string tagName, int startIndex)
-        {
-            return source.IndexOf("<" + tagName, startIndex, StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static int IndexOfTagEnd(string source, int tagStartIndex)
-        {
-            if (tagStartIndex < 0)
-                return -1;
-
-            int end = source.IndexOf('>', tagStartIndex);
-            if (end < 0)
-                return -1;
-
-            return end + 1;
-        }
-
-        private static int IndexOfClosingTag(string source, string tagName, int startIndex)
-        {
-            return source.IndexOf("</" + tagName + ">", startIndex, StringComparison.OrdinalIgnoreCase);
         }
     }
 }
