@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using Sandbox.Definitions;
+using VRage.Game;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.ShipOffers;
 using ZeroStoreSystem.ShipOffers.Models;
@@ -13,7 +15,11 @@ namespace ZeroStoreSystem.Core
         Ingot = 2,
         Ore = 3,
         Ammo = 4,
-        Ships = 5
+        Tool = 5,
+        Bottle = 6,
+        Consumable = 7,
+        Power = 8,
+        Ships = 9
     }
 
     public class StoreCatalogItem
@@ -98,6 +104,41 @@ namespace ZeroStoreSystem.Core
             "MyObjectBuilder_AmmoMagazine/ElitePistolMagazine"
         };
 
+        public static readonly string[] VanillaToolIds =
+        {
+            "MyObjectBuilder_PhysicalGunObject/WelderItem",
+            "MyObjectBuilder_PhysicalGunObject/Welder2Item",
+            "MyObjectBuilder_PhysicalGunObject/Welder3Item",
+            "MyObjectBuilder_PhysicalGunObject/Welder4Item",
+            "MyObjectBuilder_PhysicalGunObject/AngleGrinderItem",
+            "MyObjectBuilder_PhysicalGunObject/AngleGrinder2Item",
+            "MyObjectBuilder_PhysicalGunObject/AngleGrinder3Item",
+            "MyObjectBuilder_PhysicalGunObject/AngleGrinder4Item",
+            "MyObjectBuilder_PhysicalGunObject/HandDrillItem",
+            "MyObjectBuilder_PhysicalGunObject/HandDrill2Item",
+            "MyObjectBuilder_PhysicalGunObject/HandDrill3Item",
+            "MyObjectBuilder_PhysicalGunObject/HandDrill4Item"
+        };
+
+        public static readonly string[] VanillaBottleIds =
+        {
+            "MyObjectBuilder_OxygenContainerObject/OxygenBottle",
+            "MyObjectBuilder_GasContainerObject/HydrogenBottle"
+        };
+
+        public static readonly string[] VanillaConsumableIds =
+        {
+            "MyObjectBuilder_ConsumableItem/Medkit",
+            "MyObjectBuilder_ConsumableItem/ClangCola",
+            "MyObjectBuilder_ConsumableItem/CosmicCoffee",
+            "MyObjectBuilder_Package/Package"
+        };
+
+        public static readonly string[] VanillaPowerIds =
+        {
+            "MyObjectBuilder_ConsumableItem/Powerkit"
+        };
+
         public static readonly string[] KnownShipOfferIds =
         {
             "MyObjectBuilder_Component/SCC Zeus MKI",
@@ -115,6 +156,14 @@ namespace ZeroStoreSystem.Core
                 yield return VanillaOreIds[i];
             for (i = 0; i < VanillaAmmoIds.Length; i++)
                 yield return VanillaAmmoIds[i];
+            for (i = 0; i < VanillaToolIds.Length; i++)
+                yield return VanillaToolIds[i];
+            for (i = 0; i < VanillaBottleIds.Length; i++)
+                yield return VanillaBottleIds[i];
+            for (i = 0; i < VanillaConsumableIds.Length; i++)
+                yield return VanillaConsumableIds[i];
+            for (i = 0; i < VanillaPowerIds.Length; i++)
+                yield return VanillaPowerIds[i];
         }
 
         public static IEnumerable<StoreCatalogItem> EnumerateCatalogItems()
@@ -131,6 +180,23 @@ namespace ZeroStoreSystem.Core
                         IsVanilla = true
                     };
                 }
+            }
+
+            foreach (string id in EnumerateRuntimeDefinitionIds())
+            {
+                if (!seen.Add(id))
+                    continue;
+
+                StoreItemCategory category = GetCategory(id);
+                if (category == StoreItemCategory.Unknown || category == StoreItemCategory.Ships)
+                    continue;
+
+                yield return new StoreCatalogItem
+                {
+                    Id = id,
+                    Category = category,
+                    IsVanilla = IsVanilla(id)
+                };
             }
 
             List<ShipStoreOfferDefinition> offers = ShipStoreOfferCatalog.GetOffers();
@@ -167,6 +233,21 @@ namespace ZeroStoreSystem.Core
 
             if (Contains(KnownShipOfferIds, id))
                 return StoreItemCategory.Ships;
+            if (Contains(VanillaToolIds, id) || id.StartsWith("MyObjectBuilder_PhysicalGunObject/", StringComparison.OrdinalIgnoreCase))
+                return StoreItemCategory.Tool;
+            if (Contains(VanillaBottleIds, id)
+                || id.StartsWith("MyObjectBuilder_OxygenContainerObject/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_GasContainerObject/", StringComparison.OrdinalIgnoreCase))
+                return StoreItemCategory.Bottle;
+            if (Contains(VanillaPowerIds, id)
+                || EndsWithAny(id, "/Powerkit", "/PowerKit")
+                || ContainsAny(id, "battery", "cell", "powerkit", "energykit"))
+                return StoreItemCategory.Power;
+            if (Contains(VanillaConsumableIds, id)
+                || id.StartsWith("MyObjectBuilder_ConsumableItem/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_Package/", StringComparison.OrdinalIgnoreCase)
+                || ContainsAny(id, "medkit", "cola", "coffee", "ration", "meal", "food", "drink"))
+                return StoreItemCategory.Consumable;
             if (id.StartsWith("MyObjectBuilder_Component/", StringComparison.OrdinalIgnoreCase))
                 return StoreItemCategory.Component;
             if (id.StartsWith("MyObjectBuilder_Ingot/", StringComparison.OrdinalIgnoreCase))
@@ -179,12 +260,62 @@ namespace ZeroStoreSystem.Core
             return StoreItemCategory.Unknown;
         }
 
+
+        private static IEnumerable<string> EnumerateRuntimeDefinitionIds()
+        {
+            MyDefinitionManager manager = MyDefinitionManager.Static;
+            if (manager == null)
+                yield break;
+
+            foreach (var definition in manager.GetAllDefinitions())
+            {
+                if (definition == null)
+                    continue;
+
+                string id = ToCatalogId(definition.Id);
+                if (string.IsNullOrWhiteSpace(id))
+                    continue;
+
+                if (!IsSupportedCatalogType(id))
+                    continue;
+
+                yield return id;
+            }
+        }
+
+        private static bool IsSupportedCatalogType(string id)
+        {
+            return id.StartsWith("MyObjectBuilder_Component/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_Ingot/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_Ore/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_AmmoMagazine/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_PhysicalGunObject/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_OxygenContainerObject/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_GasContainerObject/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_ConsumableItem/", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("MyObjectBuilder_Package/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ToCatalogId(MyDefinitionId definitionId)
+        {
+            string typeId = definitionId.TypeId.ToString();
+            string subtypeId = definitionId.SubtypeName;
+            if (string.IsNullOrWhiteSpace(typeId) || string.IsNullOrWhiteSpace(subtypeId))
+                return string.Empty;
+
+            return typeId + "/" + subtypeId;
+        }
+
         public static bool IsVanilla(string id)
         {
             return Contains(VanillaComponentIds, id)
                 || Contains(VanillaIngotIds, id)
                 || Contains(VanillaOreIds, id)
                 || Contains(VanillaAmmoIds, id)
+                || Contains(VanillaToolIds, id)
+                || Contains(VanillaBottleIds, id)
+                || Contains(VanillaConsumableIds, id)
+                || Contains(VanillaPowerIds, id)
                 || Contains(KnownShipOfferIds, id);
         }
 
@@ -196,8 +327,12 @@ namespace ZeroStoreSystem.Core
                 case StoreItemCategory.Ingot: return 1;
                 case StoreItemCategory.Ore: return 2;
                 case StoreItemCategory.Ammo: return 3;
-                case StoreItemCategory.Ships: return 4;
-                default: return 5;
+                case StoreItemCategory.Tool: return 4;
+                case StoreItemCategory.Bottle: return 5;
+                case StoreItemCategory.Consumable: return 6;
+                case StoreItemCategory.Power: return 7;
+                case StoreItemCategory.Ships: return 8;
+                default: return 9;
             }
         }
 
@@ -232,6 +367,38 @@ namespace ZeroStoreSystem.Core
             for (i = 0; i < ids.Length; i++)
             {
                 if (string.Equals(ids[i], id, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool ContainsAny(string id, params string[] tokens)
+        {
+            if (string.IsNullOrWhiteSpace(id) || tokens == null)
+                return false;
+
+            int i;
+            for (i = 0; i < tokens.Length; i++)
+            {
+                string token = tokens[i];
+                if (!string.IsNullOrWhiteSpace(token) && id.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool EndsWithAny(string id, params string[] suffixes)
+        {
+            if (string.IsNullOrWhiteSpace(id) || suffixes == null)
+                return false;
+
+            int i;
+            for (i = 0; i < suffixes.Length; i++)
+            {
+                string suffix = suffixes[i];
+                if (!string.IsNullOrWhiteSpace(suffix) && id.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
 

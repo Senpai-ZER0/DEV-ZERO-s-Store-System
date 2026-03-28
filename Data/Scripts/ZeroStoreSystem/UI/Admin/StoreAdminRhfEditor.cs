@@ -253,6 +253,10 @@ namespace ZeroStoreSystem.UI.Admin
             _filterDropdown.List.Add(new RichText("Ingots"), nameof(StoreEditorFilter.Ingots));
             _filterDropdown.List.Add(new RichText("Ores"), nameof(StoreEditorFilter.Ores));
             _filterDropdown.List.Add(new RichText("Ammo"), nameof(StoreEditorFilter.Ammo));
+            _filterDropdown.List.Add(new RichText("Tools"), nameof(StoreEditorFilter.Tools));
+            _filterDropdown.List.Add(new RichText("Bottles"), nameof(StoreEditorFilter.Bottles));
+            _filterDropdown.List.Add(new RichText("Consumables"), nameof(StoreEditorFilter.Consumables));
+            _filterDropdown.List.Add(new RichText("Power"), nameof(StoreEditorFilter.Power));
             _filterDropdown.List.Add(new RichText("Ships"), nameof(StoreEditorFilter.Ships));
         }
 

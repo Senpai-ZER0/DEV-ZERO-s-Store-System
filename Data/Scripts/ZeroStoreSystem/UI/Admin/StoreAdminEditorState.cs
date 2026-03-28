@@ -17,6 +17,10 @@ namespace ZeroStoreSystem.UI.Admin
         Ingots,
         Ores,
         Ammo,
+        Tools,
+        Bottles,
+        Consumables,
+        Power,
         Ships
     }
 
@@ -60,6 +64,18 @@ namespace ZeroStoreSystem.UI.Admin
                     break;
                 case StoreEditorFilter.Ammo:
                     query = query.Where(x => x != null && x.Category == StoreItemCategory.Ammo);
+                    break;
+                case StoreEditorFilter.Tools:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Tool);
+                    break;
+                case StoreEditorFilter.Bottles:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Bottle);
+                    break;
+                case StoreEditorFilter.Consumables:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Consumable);
+                    break;
+                case StoreEditorFilter.Power:
+                    query = query.Where(x => x != null && x.Category == StoreItemCategory.Power);
                     break;
                 case StoreEditorFilter.Ships:
                     query = query.Where(x => x != null && x.Category == StoreItemCategory.Ships);
@@ -106,7 +122,6 @@ namespace ZeroStoreSystem.UI.Admin
 
             if (Config == null)
                 Config = new StoreBlockConfig();
-
             if (Config.ItemRules == null)
                 Config.ItemRules = new List<StoreItemRule>();
             if (Config.ShipOfferRules == null)
@@ -116,7 +131,6 @@ namespace ZeroStoreSystem.UI.Admin
             {
                 if (catalogItem == null || string.IsNullOrWhiteSpace(catalogItem.Id))
                     continue;
-
                 if (catalogItem.Category == StoreItemCategory.Ships)
                     continue;
 
@@ -129,7 +143,6 @@ namespace ZeroStoreSystem.UI.Admin
                 StoreItemRule rule = Config.ItemRules[i];
                 if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
                     continue;
-
                 if (StoreItemCatalog.GetCategory(rule.Id) == StoreItemCategory.Ships)
                     continue;
 
@@ -225,7 +238,8 @@ namespace ZeroStoreSystem.UI.Admin
 
         private static bool Contains(string haystack, string needle)
         {
-            return !string.IsNullOrWhiteSpace(haystack) && haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
+            return !string.IsNullOrWhiteSpace(haystack)
+                && haystack.IndexOf(needle, StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }
