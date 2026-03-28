@@ -14,6 +14,15 @@ namespace ZeroStoreSystem.Profiles
         public bool Enabled = true;
         public string FallbackProfileId = "Neutral";
         public bool UseBuiltInProfilesAsFallback = true;
+        public bool AllowValueJitter = true;
+        public float DefaultOfferPriceRandomMin = -0.04f;
+        public float DefaultOfferPriceRandomMax = 0.08f;
+        public float DefaultOrderPriceRandomMin = -0.04f;
+        public float DefaultOrderPriceRandomMax = 0.08f;
+        public float DefaultOfferAmountRandomMin = -0.10f;
+        public float DefaultOfferAmountRandomMax = 0.15f;
+        public float DefaultOrderAmountRandomMin = -0.10f;
+        public float DefaultOrderAmountRandomMax = 0.15f;
 
         [XmlArray("TagAliases")]
         [XmlArrayItem("StoreGenerationTagAliasEntry")]
@@ -48,6 +57,14 @@ namespace ZeroStoreSystem.Profiles
         public float OrderPriceMultiplier = 1.0f;
         public float OfferAmountMultiplier = 1.0f;
         public float OrderAmountMultiplier = 1.0f;
+        public float OfferPriceRandomMin = 0.0f;
+        public float OfferPriceRandomMax = 0.0f;
+        public float OrderPriceRandomMin = 0.0f;
+        public float OrderPriceRandomMax = 0.0f;
+        public float OfferAmountRandomMin = 0.0f;
+        public float OfferAmountRandomMax = 0.0f;
+        public float OrderAmountRandomMin = 0.0f;
+        public float OrderAmountRandomMax = 0.0f;
         public string PlayerServiceName = string.Empty;
         public string PlayerRestrictionsSummary = string.Empty;
         public string PlayerDetailsDescription = string.Empty;
@@ -83,10 +100,19 @@ namespace ZeroStoreSystem.Profiles
         public string VariantId = "Default";
         public StoreTradeMode TradeMode = StoreTradeMode.BuyAndSell;
         public int RefreshIntervalSeconds = 0;
+        public bool AllowValueJitter = true;
         public float OfferPriceMultiplier = 1.0f;
         public float OrderPriceMultiplier = 1.0f;
         public float OfferAmountMultiplier = 1.0f;
         public float OrderAmountMultiplier = 1.0f;
+        public float OfferPriceRandomMin = 0.0f;
+        public float OfferPriceRandomMax = 0.0f;
+        public float OrderPriceRandomMin = 0.0f;
+        public float OrderPriceRandomMax = 0.0f;
+        public float OfferAmountRandomMin = 0.0f;
+        public float OfferAmountRandomMax = 0.0f;
+        public float OrderAmountRandomMin = 0.0f;
+        public float OrderAmountRandomMax = 0.0f;
         public string PlayerServiceName = string.Empty;
         public string PlayerRestrictionsSummary = string.Empty;
         public string PlayerDetailsDescription = string.Empty;
@@ -101,6 +127,7 @@ namespace ZeroStoreSystem.Profiles
     public static class StoreGenerationProfileCatalog
     {
         private const string RelativePath = "Data/StoreData/StoreGenerationConfig.xml";
+        private const string WorldStorageFileName = "StoreGenerationConfig.xml";
 
         private static bool _loaded;
         private static StoreGenerationConfigDefinition _config;
@@ -149,30 +176,15 @@ namespace ZeroStoreSystem.Profiles
                 return;
 
             _loaded = true;
-            _config = new StoreGenerationConfigDefinition();
+            _config = null;
 
             try
             {
-                var session = MyAPIGateway.Session;
-                if (session != null && session.Mods != null)
+                if (!TryLoadWorldConfig())
                 {
-                    foreach (var mod in session.Mods)
-                    {
-                        try
-                        {
-                            if (!MyAPIGateway.Utilities.FileExistsInModLocation(RelativePath, mod))
-                                continue;
-
-                            using (var reader = MyAPIGateway.Utilities.ReadFileInModLocation(RelativePath, mod))
-                            {
-                                MergeConfig(Deserialize(reader.ReadToEnd()));
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            Log.Error("Failed to read StoreGenerationConfig from mod '" + mod.Name + "': " + e.Message);
-                        }
-                    }
+                    EnsureWorldConfigExists();
+                    if (!TryLoadWorldConfig())
+                        TryLoadModConfig();
                 }
             }
             catch (Exception e)
@@ -180,7 +192,88 @@ namespace ZeroStoreSystem.Profiles
                 Log.Error("StoreGenerationProfileCatalog load failed: " + e);
             }
 
+            if (_config == null)
+                _config = CreateDefaultConfigDefinition();
+
             BuildLookups();
+        }
+
+        private static bool TryLoadWorldConfig()
+        {
+            try
+            {
+                if (MyAPIGateway.Utilities == null)
+                    return false;
+                if (!MyAPIGateway.Utilities.FileExistsInWorldStorage(WorldStorageFileName, typeof(StoreGenerationProfileCatalog)))
+                    return false;
+
+                using (var reader = MyAPIGateway.Utilities.ReadFileInWorldStorage(WorldStorageFileName, typeof(StoreGenerationProfileCatalog)))
+                {
+                    MergeConfig(Deserialize(reader.ReadToEnd()));
+                }
+
+                return _config != null;
+            }
+            catch (Exception e)
+            {
+                Log.Error("Failed to read world StoreGenerationConfig.xml: " + e.Message);
+                return false;
+            }
+        }
+
+        private static void EnsureWorldConfigExists()
+        {
+            try
+            {
+                if (MyAPIGateway.Utilities == null)
+                    return;
+                if (MyAPIGateway.Utilities.FileExistsInWorldStorage(WorldStorageFileName, typeof(StoreGenerationProfileCatalog)))
+                    return;
+
+                string xml = MyAPIGateway.Utilities.SerializeToXML(CreateDefaultConfigDefinition());
+                using (var writer = MyAPIGateway.Utilities.WriteFileInWorldStorage(WorldStorageFileName, typeof(StoreGenerationProfileCatalog)))
+                {
+                    writer.Write(xml);
+                }
+
+                Log.Info("Default StoreGenerationConfig.xml written to world storage.");
+            }
+            catch (Exception e)
+            {
+                Log.Error("Failed to create world StoreGenerationConfig.xml: " + e.Message);
+            }
+        }
+
+        private static void TryLoadModConfig()
+        {
+            try
+            {
+                var session = MyAPIGateway.Session;
+                if (session == null || session.Mods == null)
+                    return;
+
+                foreach (var mod in session.Mods)
+                {
+                    try
+                    {
+                        if (!MyAPIGateway.Utilities.FileExistsInModLocation(RelativePath, mod))
+                            continue;
+
+                        using (var reader = MyAPIGateway.Utilities.ReadFileInModLocation(RelativePath, mod))
+                        {
+                            MergeConfig(Deserialize(reader.ReadToEnd()));
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Log.Error("Failed to read StoreGenerationConfig from mod '" + mod.Name + "': " + e.Message);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Error("StoreGenerationProfileCatalog mod fallback load failed: " + e.Message);
+            }
         }
 
         private static StoreGenerationConfigDefinition Deserialize(string xml)
@@ -204,12 +297,24 @@ namespace ZeroStoreSystem.Profiles
             if (other == null)
                 return;
 
+            if (_config == null)
+                _config = new StoreGenerationConfigDefinition();
+
             _config.Enabled = other.Enabled;
 
             if (!string.IsNullOrWhiteSpace(other.FallbackProfileId))
                 _config.FallbackProfileId = other.FallbackProfileId;
 
             _config.UseBuiltInProfilesAsFallback = other.UseBuiltInProfilesAsFallback;
+            _config.AllowValueJitter = other.AllowValueJitter;
+            _config.DefaultOfferPriceRandomMin = other.DefaultOfferPriceRandomMin;
+            _config.DefaultOfferPriceRandomMax = other.DefaultOfferPriceRandomMax;
+            _config.DefaultOrderPriceRandomMin = other.DefaultOrderPriceRandomMin;
+            _config.DefaultOrderPriceRandomMax = other.DefaultOrderPriceRandomMax;
+            _config.DefaultOfferAmountRandomMin = other.DefaultOfferAmountRandomMin;
+            _config.DefaultOfferAmountRandomMax = other.DefaultOfferAmountRandomMax;
+            _config.DefaultOrderAmountRandomMin = other.DefaultOrderAmountRandomMin;
+            _config.DefaultOrderAmountRandomMax = other.DefaultOrderAmountRandomMax;
 
             if (other.TagAliases != null)
                 _config.TagAliases.AddRange(other.TagAliases);
@@ -326,10 +431,19 @@ namespace ZeroStoreSystem.Profiles
             resolved.VariantId = !string.IsNullOrWhiteSpace(variant.VariantId) ? variant.VariantId : "Default";
             resolved.TradeMode = ParseTradeMode(variant.TradeMode);
             resolved.RefreshIntervalSeconds = Math.Max(0, variant.RefreshIntervalSeconds);
+            resolved.AllowValueJitter = _config == null || _config.AllowValueJitter;
             resolved.OfferPriceMultiplier = variant.OfferPriceMultiplier <= 0f ? 1f : variant.OfferPriceMultiplier;
             resolved.OrderPriceMultiplier = variant.OrderPriceMultiplier <= 0f ? 1f : variant.OrderPriceMultiplier;
             resolved.OfferAmountMultiplier = variant.OfferAmountMultiplier <= 0f ? 1f : variant.OfferAmountMultiplier;
             resolved.OrderAmountMultiplier = variant.OrderAmountMultiplier <= 0f ? 1f : variant.OrderAmountMultiplier;
+            resolved.OfferPriceRandomMin = ResolveRandomMin(variant.OfferPriceRandomMin, variant.OfferPriceRandomMax, _config != null ? _config.DefaultOfferPriceRandomMin : 0f, _config != null ? _config.DefaultOfferPriceRandomMax : 0f);
+            resolved.OfferPriceRandomMax = ResolveRandomMax(variant.OfferPriceRandomMin, variant.OfferPriceRandomMax, _config != null ? _config.DefaultOfferPriceRandomMin : 0f, _config != null ? _config.DefaultOfferPriceRandomMax : 0f);
+            resolved.OrderPriceRandomMin = ResolveRandomMin(variant.OrderPriceRandomMin, variant.OrderPriceRandomMax, _config != null ? _config.DefaultOrderPriceRandomMin : 0f, _config != null ? _config.DefaultOrderPriceRandomMax : 0f);
+            resolved.OrderPriceRandomMax = ResolveRandomMax(variant.OrderPriceRandomMin, variant.OrderPriceRandomMax, _config != null ? _config.DefaultOrderPriceRandomMin : 0f, _config != null ? _config.DefaultOrderPriceRandomMax : 0f);
+            resolved.OfferAmountRandomMin = ResolveRandomMin(variant.OfferAmountRandomMin, variant.OfferAmountRandomMax, _config != null ? _config.DefaultOfferAmountRandomMin : 0f, _config != null ? _config.DefaultOfferAmountRandomMax : 0f);
+            resolved.OfferAmountRandomMax = ResolveRandomMax(variant.OfferAmountRandomMin, variant.OfferAmountRandomMax, _config != null ? _config.DefaultOfferAmountRandomMin : 0f, _config != null ? _config.DefaultOfferAmountRandomMax : 0f);
+            resolved.OrderAmountRandomMin = ResolveRandomMin(variant.OrderAmountRandomMin, variant.OrderAmountRandomMax, _config != null ? _config.DefaultOrderAmountRandomMin : 0f, _config != null ? _config.DefaultOrderAmountRandomMax : 0f);
+            resolved.OrderAmountRandomMax = ResolveRandomMax(variant.OrderAmountRandomMin, variant.OrderAmountRandomMax, _config != null ? _config.DefaultOrderAmountRandomMin : 0f, _config != null ? _config.DefaultOrderAmountRandomMax : 0f);
             resolved.PlayerServiceName = variant.PlayerServiceName ?? string.Empty;
             resolved.PlayerRestrictionsSummary = variant.PlayerRestrictionsSummary ?? string.Empty;
             resolved.PlayerDetailsDescription = variant.PlayerDetailsDescription ?? string.Empty;
@@ -342,6 +456,43 @@ namespace ZeroStoreSystem.Profiles
             AddStrings(resolved.ForbiddenItemIds, variant.ForbiddenItemIds);
 
             return resolved;
+        }
+
+        private static float ResolveRandomMin(float variantMin, float variantMax, float defaultMin, float defaultMax)
+        {
+            if (Math.Abs(variantMin) < 0.0001f && Math.Abs(variantMax) < 0.0001f)
+                return defaultMin;
+
+            return variantMin;
+        }
+
+        private static float ResolveRandomMax(float variantMin, float variantMax, float defaultMin, float defaultMax)
+        {
+            if (Math.Abs(variantMin) < 0.0001f && Math.Abs(variantMax) < 0.0001f)
+                return defaultMax;
+
+            return variantMax;
+        }
+
+        private static StoreGenerationConfigDefinition CreateDefaultConfigDefinition()
+        {
+            return new StoreGenerationConfigDefinition
+            {
+                Enabled = true,
+                FallbackProfileId = "Neutral",
+                UseBuiltInProfilesAsFallback = true,
+                AllowValueJitter = true,
+                DefaultOfferPriceRandomMin = -0.04f,
+                DefaultOfferPriceRandomMax = 0.08f,
+                DefaultOrderPriceRandomMin = -0.04f,
+                DefaultOrderPriceRandomMax = 0.08f,
+                DefaultOfferAmountRandomMin = -0.10f,
+                DefaultOfferAmountRandomMax = 0.15f,
+                DefaultOrderAmountRandomMin = -0.10f,
+                DefaultOrderAmountRandomMax = 0.15f,
+                TagAliases = CreateBuiltInAliases(),
+                CustomProfiles = CreateBuiltInProfiles()
+            };
         }
 
         private static void AddStrings(HashSet<string> target, List<string> values)
@@ -474,7 +625,15 @@ namespace ZeroStoreSystem.Profiles
                             PlayerRestrictionsSummary = "Balanced civilian supply",
                             PlayerDetailsDescription = "Balanced mixed inventory for general-purpose neutral stations.",
                             OfferAmountMultiplier = 1.0f,
-                            OrderAmountMultiplier = 1.0f
+                            OrderAmountMultiplier = 1.0f,
+                            OfferPriceRandomMin = -0.03f,
+                            OfferPriceRandomMax = 0.06f,
+                            OrderPriceRandomMin = -0.03f,
+                            OrderPriceRandomMax = 0.05f,
+                            OfferAmountRandomMin = -0.08f,
+                            OfferAmountRandomMax = 0.12f,
+                            OrderAmountRandomMin = -0.08f,
+                            OrderAmountRandomMax = 0.10f
                         }
                     }
                 },
@@ -496,7 +655,15 @@ namespace ZeroStoreSystem.Profiles
                             PlayerRestrictionsSummary = "Heavy materials and practical utility stock",
                             PlayerDetailsDescription = "Industrial stations focus on construction, raw materials and service tools.",
                             OfferAmountMultiplier = 1.35f,
-                            OrderAmountMultiplier = 1.25f
+                            OrderAmountMultiplier = 1.25f,
+                            OfferPriceRandomMin = -0.02f,
+                            OfferPriceRandomMax = 0.10f,
+                            OrderPriceRandomMin = -0.02f,
+                            OrderPriceRandomMax = 0.08f,
+                            OfferAmountRandomMin = -0.06f,
+                            OfferAmountRandomMax = 0.18f,
+                            OrderAmountRandomMin = -0.06f,
+                            OrderAmountRandomMax = 0.15f
                         }
                     }
                 },
@@ -517,7 +684,15 @@ namespace ZeroStoreSystem.Profiles
                             PlayerRestrictionsSummary = "No dedicated munitions catalogue",
                             PlayerDetailsDescription = "Civilian stations emphasize life-support, tools and common maintenance goods.",
                             OfferAmountMultiplier = 1.1f,
-                            OrderAmountMultiplier = 0.9f
+                            OrderAmountMultiplier = 0.9f,
+                            OfferPriceRandomMin = -0.05f,
+                            OfferPriceRandomMax = 0.05f,
+                            OrderPriceRandomMin = -0.04f,
+                            OrderPriceRandomMax = 0.04f,
+                            OfferAmountRandomMin = -0.10f,
+                            OfferAmountRandomMax = 0.10f,
+                            OrderAmountRandomMin = -0.10f,
+                            OrderAmountRandomMax = 0.08f
                         }
                     }
                 },

@@ -35,6 +35,7 @@ namespace ZeroStoreSystem.UI.Admin
 
         private TerminalList<string> _itemList;
         private TerminalLabel _itemSummaryLabel;
+        private TerminalButton _quickEnableButton;
 
         private TerminalOnOffButton _allowedToggle;
         private TerminalOnOffButton _forceIncludeToggle;
@@ -179,15 +180,18 @@ namespace ZeroStoreSystem.UI.Admin
             var itemCategory = new ControlCategory
             {
                 HeaderText = "Items",
-                SubheaderText = "Select an item or ship from the filtered list. Double-click an item to enable trade quickly according to the current Trade Mode."
+                SubheaderText = "Select an item or ship from the filtered list. Double-click support remains enabled; use Quick Enable as the reliable fast-setup action for the selected item."
             };
 
             var itemTile1 = new ControlTile();
             _itemList = new TerminalList<string> { Name = "Catalog Entries" };
             _itemList.ControlChanged += ItemSelectionChanged;
             _itemSummaryLabel = new TerminalLabel { Name = "No item selected." };
+            _quickEnableButton = new TerminalButton { Name = "Quick Enable" };
+            _quickEnableButton.ControlChanged += (s, e) => QuickEnableCurrentItem();
             itemTile1.Add(_itemList);
             itemTile1.Add(_itemSummaryLabel);
+            itemTile1.Add(_quickEnableButton);
 
             var editTile1 = new ControlTile();
             _allowedToggle = new TerminalOnOffButton { Name = "Allowed" };
@@ -423,6 +427,8 @@ namespace ZeroStoreSystem.UI.Admin
             _orderEnabledToggle.Enabled = hasRule;
             _orderPriceField.Enabled = hasRule;
             _orderAmountField.Enabled = hasRule;
+            if (_quickEnableButton != null)
+                _quickEnableButton.Enabled = hasRule;
 
             if (hasRule)
             {
@@ -482,6 +488,8 @@ namespace ZeroStoreSystem.UI.Admin
             _saveButton.Enabled = enabled;
             _regenButton.Enabled = enabled;
             _itemList.Enabled = enabled;
+            if (_quickEnableButton != null)
+                _quickEnableButton.Enabled = enabled;
             if (!enabled)
                 RefreshSelectedItemControls();
         }
@@ -586,6 +594,19 @@ namespace ZeroStoreSystem.UI.Admin
                 RefreshItemList();
                 SelectItemById(itemId);
                 Notify("Quick trade setup applied for " + itemId + ".");
+            }
+        }
+
+        private void QuickEnableCurrentItem()
+        {
+            if (string.IsNullOrWhiteSpace(_selectedItemId))
+                return;
+
+            if (_state.ApplyQuickTradeSetup(_selectedItemId))
+            {
+                RefreshItemList();
+                SelectItemById(_selectedItemId);
+                Notify("Quick trade setup applied for " + _selectedItemId + ".");
             }
         }
 

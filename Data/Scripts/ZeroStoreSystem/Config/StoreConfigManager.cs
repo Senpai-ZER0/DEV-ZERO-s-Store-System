@@ -69,6 +69,21 @@ namespace ZeroStoreSystem.Config
             return sb.ToString();
         }
 
+
+        public static void RebuildAutoProfileRules(IMyTerminalBlock block, StoreBlockConfig config)
+        {
+            if (config == null)
+                return;
+
+            if (config.ItemRules == null)
+                config.ItemRules = new System.Collections.Generic.List<StoreItemRule>();
+            if (config.ShipOfferRules == null)
+                config.ShipOfferRules = new System.Collections.Generic.List<ShipOfferRule>();
+
+            AddDefaultCatalogRules(config);
+            ApplyAutoProfileDefaults(block, config);
+        }
+
         public static void WriteDefaultBlockConfig(IMyTerminalBlock block)
         {
             if (block == null)
@@ -316,10 +331,10 @@ namespace ZeroStoreSystem.Config
                 rule.ForceInclude = false;
                 rule.Offer.Enabled = false;
                 rule.Offer.Amount = 0;
-                rule.Offer.PriceMod = resolved.OfferPriceMultiplier <= 0f ? 1f : resolved.OfferPriceMultiplier;
+                rule.Offer.PriceMod = BuildPriceMultiplier(block, rule.Id, resolved.OfferPriceMultiplier, resolved.OfferPriceRandomMin, resolved.OfferPriceRandomMax, 101, resolved.AllowValueJitter);
                 rule.Order.Enabled = false;
                 rule.Order.Amount = 0;
-                rule.Order.PriceMod = resolved.OrderPriceMultiplier <= 0f ? 1f : resolved.OrderPriceMultiplier;
+                rule.Order.PriceMod = BuildPriceMultiplier(block, rule.Id, resolved.OrderPriceMultiplier, resolved.OrderPriceRandomMin, resolved.OrderPriceRandomMax, 211, resolved.AllowValueJitter);
 
                 if (!allowed)
                     continue;
@@ -332,7 +347,7 @@ namespace ZeroStoreSystem.Config
                 if (allowOffer && config.TradeMode != StoreTradeMode.BuyOnly)
                 {
                     rule.Offer.Enabled = true;
-                    rule.Offer.Amount = ScaleAmount(StoreItemCatalog.GetSuggestedAmount(rule.Id), resolved.OfferAmountMultiplier);
+                    rule.Offer.Amount = BuildAmount(block, rule.Id, StoreItemCatalog.GetSuggestedAmount(rule.Id), resolved.OfferAmountMultiplier, resolved.OfferAmountRandomMin, resolved.OfferAmountRandomMax, 307, resolved.AllowValueJitter);
                     rule.ForceInclude = true;
                     anyActive = true;
                 }
@@ -340,7 +355,7 @@ namespace ZeroStoreSystem.Config
                 if (allowOrder && config.TradeMode != StoreTradeMode.SellOnly)
                 {
                     rule.Order.Enabled = true;
-                    rule.Order.Amount = ScaleAmount(StoreItemCatalog.GetSuggestedAmount(rule.Id), resolved.OrderAmountMultiplier);
+                    rule.Order.Amount = BuildAmount(block, rule.Id, StoreItemCatalog.GetSuggestedAmount(rule.Id), resolved.OrderAmountMultiplier, resolved.OrderAmountRandomMin, resolved.OrderAmountRandomMax, 401, resolved.AllowValueJitter);
                     rule.ForceInclude = true;
                     anyActive = true;
                 }
@@ -348,6 +363,55 @@ namespace ZeroStoreSystem.Config
 
             if (!anyActive)
                 ActivateLegacyStarterRules(config);
+        }
+
+
+        private static float BuildPriceMultiplier(IMyTerminalBlock block, string itemId, float baseMultiplier, float randomMin, float randomMax, int salt, bool allowJitter)
+        {
+            if (baseMultiplier <= 0f)
+                baseMultiplier = 1f;
+
+            return Math.Max(0.01f, baseMultiplier * GetDeterministicRangeMultiplier(block, itemId, randomMin, randomMax, salt, allowJitter));
+        }
+
+        private static int BuildAmount(IMyTerminalBlock block, string itemId, int baseAmount, float baseMultiplier, float randomMin, float randomMax, int salt, bool allowJitter)
+        {
+            float multiplier = baseMultiplier <= 0f ? 1f : baseMultiplier;
+            multiplier *= GetDeterministicRangeMultiplier(block, itemId, randomMin, randomMax, salt, allowJitter);
+            return ScaleAmount(baseAmount, multiplier);
+        }
+
+        private static float GetDeterministicRangeMultiplier(IMyTerminalBlock block, string itemId, float randomMin, float randomMax, int salt, bool allowJitter)
+        {
+            if (!allowJitter || (Math.Abs(randomMin) < 0.0001f && Math.Abs(randomMax) < 0.0001f))
+                return 1f;
+
+            if (randomMax < randomMin)
+            {
+                float tmp = randomMin;
+                randomMin = randomMax;
+                randomMax = tmp;
+            }
+
+            float t = GetDeterministicUnitValue(block, itemId, salt);
+            float delta = randomMin + ((randomMax - randomMin) * t);
+            return Math.Max(0.05f, 1f + delta);
+        }
+
+        private static float GetDeterministicUnitValue(IMyTerminalBlock block, string itemId, int salt)
+        {
+            unchecked
+            {
+                int hash = 17;
+                long entityId = block != null ? block.EntityId : 0L;
+                long gridId = block != null && block.CubeGrid != null ? block.CubeGrid.EntityId : 0L;
+                hash = (hash * 31) + salt;
+                hash = (hash * 31) + entityId.GetHashCode();
+                hash = (hash * 31) + gridId.GetHashCode();
+                hash = (hash * 31) + (!string.IsNullOrWhiteSpace(itemId) ? StringComparer.OrdinalIgnoreCase.GetHashCode(itemId) : 0);
+                uint value = (uint)hash;
+                return (value % 1000000u) / 999999f;
+            }
         }
 
         private static int ScaleAmount(int amount, float multiplier)

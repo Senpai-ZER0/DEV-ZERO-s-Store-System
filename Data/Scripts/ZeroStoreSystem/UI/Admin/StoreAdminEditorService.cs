@@ -1,5 +1,6 @@
 using Sandbox.ModAPI;
 using VRage.Game.ModAPI;
+using ZeroStoreSystem.Config;
 using ZeroStoreSystem.Core;
 using ZeroStoreSystem.Session;
 using ZeroStoreSystem.Sync;
@@ -27,7 +28,6 @@ namespace ZeroStoreSystem.UI.Admin
         {
             if (block == null || state == null)
                 return false;
-
             if (!AdminAccess.IsLocalAdminOrHigher())
                 return false;
 
@@ -37,8 +37,15 @@ namespace ZeroStoreSystem.UI.Admin
 
         public static bool SaveAndRegenerate(IMyTerminalBlock block, StoreAdminEditorState state)
         {
-            if (!SaveToBlockOnly(block, state))
+            if (block == null || state == null)
                 return false;
+            if (!AdminAccess.IsLocalAdminOrHigher())
+                return false;
+
+            if (state.Config != null && state.Config.UseAutoProfile)
+                StoreConfigManager.RebuildAutoProfileRules(block, state.Config);
+
+            state.SaveToBlock(block);
 
             var cube = block as IMyCubeBlock;
             if (cube != null)
