@@ -48,6 +48,8 @@ namespace ZeroStoreSystem.UI.Admin
         private bool _suppressEvents;
         private long _selectedBlockId;
         private string _selectedItemId;
+        private string _lastClickedItemId;
+        private DateTime _lastItemClickUtc = DateTime.MinValue;
 
         public bool Ready => _page != null;
 
@@ -177,7 +179,7 @@ namespace ZeroStoreSystem.UI.Admin
             var itemCategory = new ControlCategory
             {
                 HeaderText = "Items",
-                SubheaderText = "Select an item or ship from the filtered list. Ships are listed for reference; item rules can be edited below."
+                SubheaderText = "Select an item or ship from the filtered list. Double-click an item to enable trade quickly according to the current Trade Mode."
             };
 
             var itemTile1 = new ControlTile();
@@ -186,14 +188,6 @@ namespace ZeroStoreSystem.UI.Admin
             _itemSummaryLabel = new TerminalLabel { Name = "No item selected." };
             itemTile1.Add(_itemList);
             itemTile1.Add(_itemSummaryLabel);
-            itemCategory.Add(itemTile1);
-            _page.Add(itemCategory);
-
-            var editCategory = new ControlCategory
-            {
-                HeaderText = "Selected Item",
-                SubheaderText = "Edit the selected item rule. Changes stay local until you save them to CustomData."
-            };
 
             var editTile1 = new ControlTile();
             _allowedToggle = new TerminalOnOffButton { Name = "Allowed" };
@@ -229,10 +223,11 @@ namespace ZeroStoreSystem.UI.Admin
             editTile3.Add(_orderPriceField);
             editTile3.Add(_orderAmountField);
 
-            editCategory.Add(editTile1);
-            editCategory.Add(editTile2);
-            editCategory.Add(editTile3);
-            _page.Add(editCategory);
+            itemCategory.Add(itemTile1);
+            itemCategory.Add(editTile1);
+            itemCategory.Add(editTile2);
+            itemCategory.Add(editTile3);
+            _page.Add(itemCategory);
 
             SetEditorControlsEnabled(false);
         }
@@ -552,8 +547,46 @@ namespace ZeroStoreSystem.UI.Admin
                 return;
 
             var selection = _itemList.Value;
-            _selectedItemId = selection != null ? selection.AssocObject : null;
+            string itemId = selection != null ? selection.AssocObject : null;
+            bool sameSelection = !string.IsNullOrWhiteSpace(itemId)
+                && string.Equals(_selectedItemId, itemId, StringComparison.OrdinalIgnoreCase);
+
+            _selectedItemId = itemId;
             RefreshSelectedItemControls();
+
+            if (sameSelection)
+                TryQuickEnableSelectedItem(itemId);
+            else
+                RememberItemClick(itemId);
+        }
+
+        private void RememberItemClick(string itemId)
+        {
+            _lastClickedItemId = itemId;
+            _lastItemClickUtc = DateTime.UtcNow;
+        }
+
+        private void TryQuickEnableSelectedItem(string itemId)
+        {
+            if (string.IsNullOrWhiteSpace(itemId))
+                return;
+
+            DateTime now = DateTime.UtcNow;
+            bool isDoubleClick = string.Equals(_lastClickedItemId, itemId, StringComparison.OrdinalIgnoreCase)
+                && (now - _lastItemClickUtc).TotalMilliseconds <= 450d;
+
+            _lastClickedItemId = itemId;
+            _lastItemClickUtc = now;
+
+            if (!isDoubleClick)
+                return;
+
+            if (_state.ApplyQuickTradeSetup(itemId))
+            {
+                RefreshItemList();
+                SelectItemById(itemId);
+                Notify("Quick trade setup applied for " + itemId + ".");
+            }
         }
 
         private void StoreEnabledChanged(object sender, EventArgs e)

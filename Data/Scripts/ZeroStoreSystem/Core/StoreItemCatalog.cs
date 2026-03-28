@@ -336,6 +336,23 @@ namespace ZeroStoreSystem.Core
             }
         }
 
+
+        public static int GetSuggestedAmount(string id)
+        {
+            switch (GetCategory(id))
+            {
+                case StoreItemCategory.Component: return 100;
+                case StoreItemCategory.Ingot: return 250;
+                case StoreItemCategory.Ore: return 500;
+                case StoreItemCategory.Ammo: return 50;
+                case StoreItemCategory.Tool: return 2;
+                case StoreItemCategory.Bottle: return 8;
+                case StoreItemCategory.Consumable: return 15;
+                case StoreItemCategory.Power: return 10;
+                default: return 10;
+            }
+        }
+
         public static StoreItemRule CreateDefaultRule(string id)
         {
             return new StoreItemRule

@@ -6,6 +6,7 @@ using RichHudFramework.Client;
 using ZeroStoreSystem.UI.Admin;
 using VRage.Input;
 using ZeroStoreSystem.ShipOffers;
+using ZeroStoreSystem.Profiles;
 
 namespace ZeroStoreSystem.Session
 {
@@ -26,6 +27,7 @@ namespace ZeroStoreSystem.Session
             GlobalConfig = new GlobalStoreConfig();
             AdminEditor = new StoreAdminRhfEditor();
             ShipStoreOfferCatalog.Invalidate();
+            StoreGenerationProfileCatalog.Invalidate();
             Log.Info("Session loaded.");
         }
 
@@ -117,6 +119,7 @@ namespace ZeroStoreSystem.Session
             AdminEditor = null;
             GlobalConfig = null;
             ShipStoreOfferCatalog.Invalidate();
+            StoreGenerationProfileCatalog.Invalidate();
             Instance = null;
         }
 
