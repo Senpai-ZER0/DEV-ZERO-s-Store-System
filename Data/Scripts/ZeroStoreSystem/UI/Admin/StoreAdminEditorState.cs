@@ -38,6 +38,12 @@ namespace ZeroStoreSystem.UI.Admin
             RebuildItems();
         }
 
+        public void LoadFromText(string customData)
+        {
+            Config = StoreConfigManager.ReadBlockConfigFromText(customData);
+            RebuildItems();
+        }
+
         public void SaveToBlock(IMyTerminalBlock block)
         {
             if (block == null || Config == null)

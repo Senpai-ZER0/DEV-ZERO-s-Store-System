@@ -24,7 +24,7 @@ namespace ZeroStoreSystem.Config
                     Log.Info("Default CustomData written for '" + block.CustomName + "'");
                 }
 
-                ParseIniLike(block.CustomData, config);
+                config = ReadBlockConfigFromText(block.CustomData);
 
                 Log.Info(
                     "Store config loaded for '" + block.CustomName + "', " +
@@ -38,6 +38,25 @@ namespace ZeroStoreSystem.Config
             return config;
         }
 
+
+        public static StoreBlockConfig ReadBlockConfigFromText(string text)
+        {
+            var config = new StoreBlockConfig();
+
+            if (string.IsNullOrWhiteSpace(text))
+                return config;
+
+            try
+            {
+                ParseIniLike(text, config);
+            }
+            catch (Exception e)
+            {
+                Log.Error("Failed to parse store config text: " + e);
+            }
+
+            return config;
+        }
 
         public static void SaveBlockConfig(IMyTerminalBlock block, StoreBlockConfig config)
         {

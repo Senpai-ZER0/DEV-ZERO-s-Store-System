@@ -32,6 +32,9 @@ namespace ZeroStoreSystem.UI.Admin
         private TerminalButton _reloadButton;
         private TerminalButton _saveButton;
         private TerminalButton _regenButton;
+        private TerminalButton _copyCustomDataButton;
+        private TerminalButton _pasteCustomDataButton;
+        private TerminalButton _pasteAndRegenerateButton;
 
         private TerminalList<string> _itemList;
         private TerminalLabel _itemSummaryLabel;
@@ -142,7 +145,7 @@ namespace ZeroStoreSystem.UI.Admin
             var filterCategory = new ControlCategory
             {
                 HeaderText = "Filter & Actions",
-                SubheaderText = "Search items, hide inactive entries, reload from CustomData, save changes, or regenerate the store immediately."
+                SubheaderText = "Search items, hide inactive entries, reload from CustomData, save changes, copy/paste config, or regenerate the store immediately."
             };
 
             var filterTile1 = new ControlTile();
@@ -170,8 +173,20 @@ namespace ZeroStoreSystem.UI.Admin
             filterTile2.Add(_saveButton);
             filterTile2.Add(_regenButton);
 
+            var filterTile3 = new ControlTile();
+            _copyCustomDataButton = new TerminalButton { Name = "Copy CustomData" };
+            _copyCustomDataButton.ControlChanged += (s, e) => CopyCurrentCustomData();
+            _pasteCustomDataButton = new TerminalButton { Name = "Paste CustomData" };
+            _pasteCustomDataButton.ControlChanged += (s, e) => PasteCurrentCustomData(false);
+            _pasteAndRegenerateButton = new TerminalButton { Name = "Paste + Regenerate" };
+            _pasteAndRegenerateButton.ControlChanged += (s, e) => PasteCurrentCustomData(true);
+            filterTile3.Add(_copyCustomDataButton);
+            filterTile3.Add(_pasteCustomDataButton);
+            filterTile3.Add(_pasteAndRegenerateButton);
+
             filterCategory.Add(filterTile1);
             filterCategory.Add(filterTile2);
+            filterCategory.Add(filterTile3);
             _page.Add(filterCategory);
 
             var itemCategory = new ControlCategory
@@ -333,6 +348,7 @@ namespace ZeroStoreSystem.UI.Admin
             _searchField.Value = _state.SearchText ?? string.Empty;
             _activeOnlyToggle.Value = _state.ActiveOnly;
             _suppressEvents = false;
+            RefreshClipboardButtons();
         }
 
         private void RefreshItemList()
@@ -486,9 +502,23 @@ namespace ZeroStoreSystem.UI.Admin
             _reloadButton.Enabled = enabled;
             _saveButton.Enabled = enabled;
             _regenButton.Enabled = enabled;
+            _copyCustomDataButton.Enabled = enabled;
+            _pasteCustomDataButton.Enabled = enabled && StoreAdminEditorService.HasCopiedCustomData;
+            _pasteAndRegenerateButton.Enabled = enabled && StoreAdminEditorService.HasCopiedCustomData;
             _itemList.Enabled = enabled;
             if (!enabled)
                 RefreshSelectedItemControls();
+        }
+
+        private void RefreshClipboardButtons()
+        {
+            bool enabled = GetSelectedBlock() != null;
+            if (_copyCustomDataButton != null)
+                _copyCustomDataButton.Enabled = enabled;
+            if (_pasteCustomDataButton != null)
+                _pasteCustomDataButton.Enabled = enabled && StoreAdminEditorService.HasCopiedCustomData;
+            if (_pasteAndRegenerateButton != null)
+                _pasteAndRegenerateButton.Enabled = enabled && StoreAdminEditorService.HasCopiedCustomData;
         }
 
         private void BlockDropdownChanged(object sender, EventArgs e)
@@ -741,6 +771,43 @@ namespace ZeroStoreSystem.UI.Admin
             else
             {
                 Notify("Failed to save store config.");
+            }
+        }
+
+        private void CopyCurrentCustomData()
+        {
+            if (StoreAdminEditorService.CopyCurrentCustomData(_state))
+            {
+                RefreshClipboardButtons();
+                Notify("Store CustomData copied from editor state.");
+            }
+            else
+            {
+                Notify("Failed to copy store CustomData.");
+            }
+        }
+
+        private void PasteCurrentCustomData(bool regenerate)
+        {
+            var block = GetSelectedBlock();
+            if (block == null)
+            {
+                Notify("No store block selected.");
+                return;
+            }
+
+            bool success = regenerate
+                ? StoreAdminEditorService.PasteAndRegenerate(block, _state)
+                : StoreAdminEditorService.PasteToBlock(block, _state);
+
+            if (success)
+            {
+                ReloadCurrentBlock();
+                Notify(regenerate ? "Store CustomData pasted and store regenerated." : "Store CustomData pasted.");
+            }
+            else
+            {
+                Notify(regenerate ? "Failed to paste and regenerate store." : "Failed to paste store CustomData.");
             }
         }
 
