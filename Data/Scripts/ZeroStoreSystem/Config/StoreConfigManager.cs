@@ -4,7 +4,6 @@ using System.Text;
 using VRage.Game.ModAPI;
 using ZeroStoreSystem.Config.Models;
 using ZeroStoreSystem.Core;
-using ZeroStoreSystem.Profiles;
 
 namespace ZeroStoreSystem.Config
 {
@@ -26,7 +25,6 @@ namespace ZeroStoreSystem.Config
                 }
 
                 ParseIniLike(block.CustomData, config);
-                ApplyResolvedProfileMetadata(block, config);
 
                 Log.Info(
                     "Store config loaded for '" + block.CustomName + "', " +
@@ -69,29 +67,13 @@ namespace ZeroStoreSystem.Config
             return sb.ToString();
         }
 
-
-        public static void RebuildAutoProfileRules(IMyTerminalBlock block, StoreBlockConfig config)
-        {
-            if (config == null)
-                return;
-
-            if (config.ItemRules == null)
-                config.ItemRules = new System.Collections.Generic.List<StoreItemRule>();
-            if (config.ShipOfferRules == null)
-                config.ShipOfferRules = new System.Collections.Generic.List<ShipOfferRule>();
-
-            AddDefaultCatalogRules(config);
-            ApplyAutoProfileDefaults(block, config);
-        }
-
         public static void WriteDefaultBlockConfig(IMyTerminalBlock block)
         {
             if (block == null)
                 return;
 
             var config = new StoreBlockConfig();
-            AddDefaultCatalogRules(config);
-            ApplyAutoProfileDefaults(block, config);
+            AddDefaultVanillaComponentRules(config);
             block.CustomData = SerializeBlockConfig(config);
         }
 
@@ -119,22 +101,38 @@ namespace ZeroStoreSystem.Config
             sb.AppendLine();
         }
 
-        private static void AddDefaultCatalogRules(StoreBlockConfig config)
+        private static void AddDefaultVanillaComponentRules(StoreBlockConfig config)
         {
             if (config == null)
                 return;
 
-            foreach (var catalogItem in StoreItemCatalog.EnumerateCatalogItems())
+            AddRule(config, "MyObjectBuilder_Component/SteelPlate", true, true, true, 1.0f, 200, false, 1.0f, 0);
+            AddRule(config, "MyObjectBuilder_Component/Construction", true, true, false, 1.0f, 0, true, 1.0f, 150);
+
+            foreach (var id in StoreItemCatalog.VanillaComponentIds)
             {
-                if (catalogItem == null || string.IsNullOrWhiteSpace(catalogItem.Id))
-                    continue;
-
-                if (catalogItem.Category == StoreItemCategory.Ships)
-                    continue;
-
-                if (FindRule(config, catalogItem.Id) == null)
-                    AddRule(config, catalogItem.Id, true, false, false, 1.0f, 0, false, 1.0f, 0);
+                if (FindRule(config, id) == null)
+                    AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
             }
+
+            foreach (var id in StoreItemCatalog.VanillaIngotIds)
+            {
+                if (FindRule(config, id) == null)
+                    AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
+            }
+
+            foreach (var id in StoreItemCatalog.VanillaOreIds)
+            {
+                if (FindRule(config, id) == null)
+                    AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
+            }
+
+            foreach (var id in StoreItemCatalog.VanillaAmmoIds)
+            {
+                if (FindRule(config, id) == null)
+                    AddRule(config, id, true, false, false, 1.0f, 0, false, 1.0f, 0);
+            }
+
         }
 
         private static void AddRule(StoreBlockConfig config, string itemId, bool allowed, bool forceInclude, bool offerEnabled, float offerPriceMod, int offerAmount, bool orderEnabled, float orderPriceMod, int orderAmount)
@@ -158,10 +156,6 @@ namespace ZeroStoreSystem.Config
             AppendCategoryGroup(sb, config, "Ingots", StoreItemCatalog.VanillaIngotIds);
             AppendCategoryGroup(sb, config, "Ores", StoreItemCatalog.VanillaOreIds);
             AppendCategoryGroup(sb, config, "Ammo", StoreItemCatalog.VanillaAmmoIds);
-            AppendCategoryGroup(sb, config, "Tools", StoreItemCatalog.VanillaToolIds);
-            AppendCategoryGroup(sb, config, "Bottles", StoreItemCatalog.VanillaBottleIds);
-            AppendCategoryGroup(sb, config, "Consumables", StoreItemCatalog.VanillaConsumableIds);
-            AppendCategoryGroup(sb, config, "Power", StoreItemCatalog.VanillaPowerIds);
 
             if (config == null || config.ItemRules == null)
                 return;
@@ -273,183 +267,6 @@ namespace ZeroStoreSystem.Config
         private static bool IsKnownVanillaComponent(string id)
         {
             return StoreItemCatalog.IsVanilla(id);
-        }
-
-        private static void ApplyResolvedProfileMetadata(IMyTerminalBlock block, StoreBlockConfig config)
-        {
-            if (block == null || config == null || !config.UseAutoProfile)
-                return;
-
-            StoreResolvedGenerationProfile resolved = StoreGenerationProfileCatalog.ResolveForBlock(block);
-            if (resolved == null)
-                return;
-
-            if (string.IsNullOrWhiteSpace(config.ProfileId))
-                config.ProfileId = resolved.ProfileId;
-
-            if (config.RefreshIntervalSeconds <= 0 && resolved.RefreshIntervalSeconds > 0)
-                config.RefreshIntervalSeconds = resolved.RefreshIntervalSeconds;
-        }
-
-        private static void ApplyAutoProfileDefaults(IMyTerminalBlock block, StoreBlockConfig config)
-        {
-            if (config == null)
-                return;
-
-            StoreResolvedGenerationProfile resolved = StoreGenerationProfileCatalog.ResolveForBlock(block);
-            if (resolved == null)
-            {
-                ActivateLegacyStarterRules(config);
-                return;
-            }
-
-            config.UseAutoProfile = true;
-            config.ProfileId = resolved.ProfileId;
-            config.TradeMode = resolved.TradeMode;
-            if (resolved.RefreshIntervalSeconds > 0)
-                config.RefreshIntervalSeconds = resolved.RefreshIntervalSeconds;
-
-            bool anyActive = false;
-
-            for (int i = 0; i < config.ItemRules.Count; i++)
-            {
-                StoreItemRule rule = config.ItemRules[i];
-                if (rule == null || string.IsNullOrWhiteSpace(rule.Id))
-                    continue;
-
-                if (rule.Offer == null)
-                    rule.Offer = new StoreOfferRule();
-                if (rule.Order == null)
-                    rule.Order = new StoreOrderRule();
-
-                StoreItemCategory category = StoreItemCatalog.GetCategory(rule.Id);
-                bool allowed = resolved.AllowedCategories.Count == 0 || resolved.AllowedCategories.Contains(category);
-                if (resolved.ForbiddenItemIds.Contains(rule.Id))
-                    allowed = false;
-
-                rule.Allowed = allowed;
-                rule.ForceInclude = false;
-                rule.Offer.Enabled = false;
-                rule.Offer.Amount = 0;
-                rule.Offer.PriceMod = BuildPriceMultiplier(block, rule.Id, resolved.OfferPriceMultiplier, resolved.OfferPriceRandomMin, resolved.OfferPriceRandomMax, 101, resolved.AllowValueJitter);
-                rule.Order.Enabled = false;
-                rule.Order.Amount = 0;
-                rule.Order.PriceMod = BuildPriceMultiplier(block, rule.Id, resolved.OrderPriceMultiplier, resolved.OrderPriceRandomMin, resolved.OrderPriceRandomMax, 211, resolved.AllowValueJitter);
-
-                if (!allowed)
-                    continue;
-
-                bool forceOffer = resolved.ForceOfferItems.Contains(rule.Id);
-                bool forceOrder = resolved.ForceOrderItems.Contains(rule.Id);
-                bool allowOffer = resolved.OfferCategories.Contains(category) || forceOffer;
-                bool allowOrder = resolved.OrderCategories.Contains(category) || forceOrder;
-
-                if (allowOffer && config.TradeMode != StoreTradeMode.BuyOnly)
-                {
-                    rule.Offer.Enabled = true;
-                    rule.Offer.Amount = BuildAmount(block, rule.Id, StoreItemCatalog.GetSuggestedAmount(rule.Id), resolved.OfferAmountMultiplier, resolved.OfferAmountRandomMin, resolved.OfferAmountRandomMax, 307, resolved.AllowValueJitter);
-                    rule.ForceInclude = true;
-                    anyActive = true;
-                }
-
-                if (allowOrder && config.TradeMode != StoreTradeMode.SellOnly)
-                {
-                    rule.Order.Enabled = true;
-                    rule.Order.Amount = BuildAmount(block, rule.Id, StoreItemCatalog.GetSuggestedAmount(rule.Id), resolved.OrderAmountMultiplier, resolved.OrderAmountRandomMin, resolved.OrderAmountRandomMax, 401, resolved.AllowValueJitter);
-                    rule.ForceInclude = true;
-                    anyActive = true;
-                }
-            }
-
-            if (!anyActive)
-                ActivateLegacyStarterRules(config);
-        }
-
-
-        private static float BuildPriceMultiplier(IMyTerminalBlock block, string itemId, float baseMultiplier, float randomMin, float randomMax, int salt, bool allowJitter)
-        {
-            if (baseMultiplier <= 0f)
-                baseMultiplier = 1f;
-
-            return Math.Max(0.01f, baseMultiplier * GetDeterministicRangeMultiplier(block, itemId, randomMin, randomMax, salt, allowJitter));
-        }
-
-        private static int BuildAmount(IMyTerminalBlock block, string itemId, int baseAmount, float baseMultiplier, float randomMin, float randomMax, int salt, bool allowJitter)
-        {
-            float multiplier = baseMultiplier <= 0f ? 1f : baseMultiplier;
-            multiplier *= GetDeterministicRangeMultiplier(block, itemId, randomMin, randomMax, salt, allowJitter);
-            return ScaleAmount(baseAmount, multiplier);
-        }
-
-        private static float GetDeterministicRangeMultiplier(IMyTerminalBlock block, string itemId, float randomMin, float randomMax, int salt, bool allowJitter)
-        {
-            if (!allowJitter || (Math.Abs(randomMin) < 0.0001f && Math.Abs(randomMax) < 0.0001f))
-                return 1f;
-
-            if (randomMax < randomMin)
-            {
-                float tmp = randomMin;
-                randomMin = randomMax;
-                randomMax = tmp;
-            }
-
-            float t = GetDeterministicUnitValue(block, itemId, salt);
-            float delta = randomMin + ((randomMax - randomMin) * t);
-            return Math.Max(0.05f, 1f + delta);
-        }
-
-        private static float GetDeterministicUnitValue(IMyTerminalBlock block, string itemId, int salt)
-        {
-            unchecked
-            {
-                int hash = 17;
-                long entityId = block != null ? block.EntityId : 0L;
-                long gridId = block != null && block.CubeGrid != null ? block.CubeGrid.EntityId : 0L;
-                hash = (hash * 31) + salt;
-                hash = (hash * 31) + entityId.GetHashCode();
-                hash = (hash * 31) + gridId.GetHashCode();
-                hash = (hash * 31) + (!string.IsNullOrWhiteSpace(itemId) ? StringComparer.OrdinalIgnoreCase.GetHashCode(itemId) : 0);
-                uint value = (uint)hash;
-                return (value % 1000000u) / 999999f;
-            }
-        }
-
-        private static int ScaleAmount(int amount, float multiplier)
-        {
-            if (amount <= 0)
-                amount = 1;
-
-            if (multiplier <= 0f)
-                multiplier = 1f;
-
-            return Math.Max(1, (int)Math.Round(amount * multiplier));
-        }
-
-        private static void ActivateLegacyStarterRules(StoreBlockConfig config)
-        {
-            StoreItemRule steel = FindRule(config, "MyObjectBuilder_Component/SteelPlate");
-            if (steel != null)
-            {
-                steel.Allowed = true;
-                steel.ForceInclude = true;
-                steel.Offer.Enabled = true;
-                steel.Offer.PriceMod = 1.0f;
-                steel.Offer.Amount = 200;
-                steel.Order.Enabled = false;
-                steel.Order.Amount = 0;
-            }
-
-            StoreItemRule construction = FindRule(config, "MyObjectBuilder_Component/Construction");
-            if (construction != null)
-            {
-                construction.Allowed = true;
-                construction.ForceInclude = true;
-                construction.Offer.Enabled = false;
-                construction.Offer.Amount = 0;
-                construction.Order.Enabled = true;
-                construction.Order.PriceMod = 1.0f;
-                construction.Order.Amount = 150;
-            }
         }
 
         private static void ParseIniLike(string text, StoreBlockConfig config)

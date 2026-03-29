@@ -224,66 +224,6 @@ namespace ZeroStoreSystem.UI.Admin
             return rule;
         }
 
-
-        public bool ApplyQuickTradeSetup(string id)
-        {
-            if (Config == null)
-                return false;
-
-            StoreAdminEditorItemViewModel item = GetItemById(id);
-            if (item == null || item.IsShip || item.Rule == null)
-                return false;
-
-            StoreItemRule rule = item.Rule;
-            if (rule.Offer == null)
-                rule.Offer = new StoreOfferRule();
-            if (rule.Order == null)
-                rule.Order = new StoreOrderRule();
-
-            rule.Allowed = true;
-
-            int suggestedAmount = StoreItemCatalog.GetSuggestedAmount(rule.Id);
-
-            switch (Config.TradeMode)
-            {
-                case StoreTradeMode.BuyOnly:
-                    rule.Offer.Enabled = false;
-                    rule.Offer.Amount = 0;
-                    rule.Order.Enabled = true;
-                    if (rule.Order.Amount <= 0)
-                        rule.Order.Amount = suggestedAmount;
-                    if (rule.Order.PriceMod <= 0f)
-                        rule.Order.PriceMod = 1f;
-                    break;
-
-                case StoreTradeMode.SellOnly:
-                    rule.Order.Enabled = false;
-                    rule.Order.Amount = 0;
-                    rule.Offer.Enabled = true;
-                    if (rule.Offer.Amount <= 0)
-                        rule.Offer.Amount = suggestedAmount;
-                    if (rule.Offer.PriceMod <= 0f)
-                        rule.Offer.PriceMod = 1f;
-                    break;
-
-                default:
-                    rule.Offer.Enabled = true;
-                    if (rule.Offer.Amount <= 0)
-                        rule.Offer.Amount = suggestedAmount;
-                    if (rule.Offer.PriceMod <= 0f)
-                        rule.Offer.PriceMod = 1f;
-
-                    rule.Order.Enabled = true;
-                    if (rule.Order.Amount <= 0)
-                        rule.Order.Amount = suggestedAmount;
-                    if (rule.Order.PriceMod <= 0f)
-                        rule.Order.PriceMod = 1f;
-                    break;
-            }
-
-            return true;
-        }
-
         private static string GetShortName(string id)
         {
             if (string.IsNullOrWhiteSpace(id))

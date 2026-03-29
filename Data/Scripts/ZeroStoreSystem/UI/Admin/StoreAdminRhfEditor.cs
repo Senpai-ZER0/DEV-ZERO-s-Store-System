@@ -35,7 +35,6 @@ namespace ZeroStoreSystem.UI.Admin
 
         private TerminalList<string> _itemList;
         private TerminalLabel _itemSummaryLabel;
-        private TerminalButton _quickEnableButton;
 
         private TerminalOnOffButton _allowedToggle;
         private TerminalOnOffButton _forceIncludeToggle;
@@ -49,8 +48,6 @@ namespace ZeroStoreSystem.UI.Admin
         private bool _suppressEvents;
         private long _selectedBlockId;
         private string _selectedItemId;
-        private string _lastClickedItemId;
-        private DateTime _lastItemClickUtc = DateTime.MinValue;
 
         public bool Ready => _page != null;
 
@@ -180,18 +177,23 @@ namespace ZeroStoreSystem.UI.Admin
             var itemCategory = new ControlCategory
             {
                 HeaderText = "Items",
-                SubheaderText = "Select an item or ship from the filtered list. Double-click support remains enabled; use Quick Enable as the reliable fast-setup action for the selected item."
+                SubheaderText = "Select an item or ship from the filtered list. Ships are listed for reference; item rules can be edited below."
             };
 
             var itemTile1 = new ControlTile();
             _itemList = new TerminalList<string> { Name = "Catalog Entries" };
             _itemList.ControlChanged += ItemSelectionChanged;
             _itemSummaryLabel = new TerminalLabel { Name = "No item selected." };
-            _quickEnableButton = new TerminalButton { Name = "Quick Enable" };
-            _quickEnableButton.ControlChanged += (s, e) => QuickEnableCurrentItem();
             itemTile1.Add(_itemList);
             itemTile1.Add(_itemSummaryLabel);
-            itemTile1.Add(_quickEnableButton);
+            itemCategory.Add(itemTile1);
+            _page.Add(itemCategory);
+
+            var editCategory = new ControlCategory
+            {
+                HeaderText = "Selected Item",
+                SubheaderText = "Edit the selected item rule. Changes stay local until you save them to CustomData."
+            };
 
             var editTile1 = new ControlTile();
             _allowedToggle = new TerminalOnOffButton { Name = "Allowed" };
@@ -227,11 +229,10 @@ namespace ZeroStoreSystem.UI.Admin
             editTile3.Add(_orderPriceField);
             editTile3.Add(_orderAmountField);
 
-            itemCategory.Add(itemTile1);
-            itemCategory.Add(editTile1);
-            itemCategory.Add(editTile2);
-            itemCategory.Add(editTile3);
-            _page.Add(itemCategory);
+            editCategory.Add(editTile1);
+            editCategory.Add(editTile2);
+            editCategory.Add(editTile3);
+            _page.Add(editCategory);
 
             SetEditorControlsEnabled(false);
         }
@@ -427,8 +428,6 @@ namespace ZeroStoreSystem.UI.Admin
             _orderEnabledToggle.Enabled = hasRule;
             _orderPriceField.Enabled = hasRule;
             _orderAmountField.Enabled = hasRule;
-            if (_quickEnableButton != null)
-                _quickEnableButton.Enabled = hasRule;
 
             if (hasRule)
             {
@@ -488,8 +487,6 @@ namespace ZeroStoreSystem.UI.Admin
             _saveButton.Enabled = enabled;
             _regenButton.Enabled = enabled;
             _itemList.Enabled = enabled;
-            if (_quickEnableButton != null)
-                _quickEnableButton.Enabled = enabled;
             if (!enabled)
                 RefreshSelectedItemControls();
         }
@@ -555,59 +552,8 @@ namespace ZeroStoreSystem.UI.Admin
                 return;
 
             var selection = _itemList.Value;
-            string itemId = selection != null ? selection.AssocObject : null;
-            bool sameSelection = !string.IsNullOrWhiteSpace(itemId)
-                && string.Equals(_selectedItemId, itemId, StringComparison.OrdinalIgnoreCase);
-
-            _selectedItemId = itemId;
+            _selectedItemId = selection != null ? selection.AssocObject : null;
             RefreshSelectedItemControls();
-
-            if (sameSelection)
-                TryQuickEnableSelectedItem(itemId);
-            else
-                RememberItemClick(itemId);
-        }
-
-        private void RememberItemClick(string itemId)
-        {
-            _lastClickedItemId = itemId;
-            _lastItemClickUtc = DateTime.UtcNow;
-        }
-
-        private void TryQuickEnableSelectedItem(string itemId)
-        {
-            if (string.IsNullOrWhiteSpace(itemId))
-                return;
-
-            DateTime now = DateTime.UtcNow;
-            bool isDoubleClick = string.Equals(_lastClickedItemId, itemId, StringComparison.OrdinalIgnoreCase)
-                && (now - _lastItemClickUtc).TotalMilliseconds <= 450d;
-
-            _lastClickedItemId = itemId;
-            _lastItemClickUtc = now;
-
-            if (!isDoubleClick)
-                return;
-
-            if (_state.ApplyQuickTradeSetup(itemId))
-            {
-                RefreshItemList();
-                SelectItemById(itemId);
-                Notify("Quick trade setup applied for " + itemId + ".");
-            }
-        }
-
-        private void QuickEnableCurrentItem()
-        {
-            if (string.IsNullOrWhiteSpace(_selectedItemId))
-                return;
-
-            if (_state.ApplyQuickTradeSetup(_selectedItemId))
-            {
-                RefreshItemList();
-                SelectItemById(_selectedItemId);
-                Notify("Quick trade setup applied for " + _selectedItemId + ".");
-            }
         }
 
         private void StoreEnabledChanged(object sender, EventArgs e)
